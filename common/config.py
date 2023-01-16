@@ -13,6 +13,9 @@ class Secrets(BaseSettings):
 
     DATA_RAW_TWEETS: str = 'data/geo/tweets/'
 
+    PROJECT_ID: str
+    USER_ID: str
+
     class Config:
         case_sensitive = True
         env_prefix = 'TGEO_'

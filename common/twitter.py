@@ -22,6 +22,7 @@ def api_page_to_tweets(page: dict[str, Any]) -> Generator[TwitterItemModel, None
         if tweet['author_id'] in users:
             user_obj = users[tweet['author_id']]
             user = TwitterUserModel(
+                id=tweet['author_id'],
                 created_at=datetime.strptime(user_obj['created_at'][:19], '%Y-%m-%dT%H:%M:%S'),
                 name=None if user_obj['name'] == user_obj['username'] else user_obj['name'],
                 username=user_obj['username'],
@@ -106,8 +107,7 @@ def download_query(query: str) -> Generator[TwitterItemModel, None, None]:
         'place.fields': 'contained_within,country,country_code,full_name,geo,id,name,place_type',
         'sort_order': 'recency',
         'start_time': '2006-03-21T00:00:00Z',
-        # 'end_time': '2022-12-31T23:59:59Z', # FIXME
-        'end_time': '2022-12-19T23:59:59Z',
+        'end_time': '2022-12-31T23:59:59Z',
         'max_results': 100
     }
 
