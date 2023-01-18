@@ -12,6 +12,7 @@ class Secrets(BaseSettings):
     TWITTER_BEARER: str = ''
 
     DATA_RAW_TWEETS: str = 'data/geo/tweets/'
+    DATA_FIGURES: str = 'data/figures/'
     DATA_MODELS: str = 'data/models/'
 
     PROJECT_ID: str

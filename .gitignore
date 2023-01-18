@@ -10,11 +10,9 @@ data/
 **/.env
 .python-version
 *.code-workspace
+figures/
 
 /viewer/layers/
-/scripts/supertopics/aggregated_topics_quarterly_bars_concentration.ipynb
-/scripts/topic_vis/myplot.png
-/scripts/geo/topic_map/
 *.json
 *.jsonl
 *.html

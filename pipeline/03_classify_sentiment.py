@@ -2,17 +2,13 @@ import logging
 import uuid
 from pathlib import Path
 
-import numpy as np
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nacsos_data.db import DatabaseEngine
-from nacsos_data.db.schemas import TwitterItem
 from nacsos_data.db.schemas.annotations import AnnotationScheme
 from nacsos_data.models.annotations import AnnotationSchemeLabel, AnnotationSchemeLabelChoice
 from nacsos_data.db.schemas.bot_annotations import BotAnnotationMetaData, BotAnnotation
-from nacsos_data.db.schemas.imports import Import, M2MImportItemType, M2MImportItem
-from nacsos_data.models.items.twitter import TwitterItemModel
 
 from common.models import Classifier
 from common.config import settings
