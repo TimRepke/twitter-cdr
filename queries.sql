@@ -127,7 +127,7 @@ ORDER BY day;
 SELECT ti.twitter_author_id,
        u.username,
        -- Number of tweets matching any CDR query
-       count(1)                                                 as num_cdr_tweets,
+       count(1)                                                as num_cdr_tweets,
        -- Tweets that are actually written and not just retweeted or quoted
        count(1) FILTER ( WHERE ti.referenced_tweets = 'null' ) as num_orig_cdr_tweets,
        -- Total number of tweets by the user (as per Twitters profile information)
@@ -137,8 +137,8 @@ SELECT ti.twitter_author_id,
        u.following_count,
        u.name,
        u.location,
-       min(ti.created_at)                                       as earliest_cdr_tweet,
-       max(ti.created_at)                                       as latest_cdr_tweet,
+       min(ti.created_at)                                      as earliest_cdr_tweet,
+       max(ti.created_at)                                      as latest_cdr_tweet,
        u.created_at,
        u.verified,
        u.description
@@ -155,9 +155,129 @@ FROM twitter_item ti,
                                       "verified" bool,
                                       "description" text
          )
+
 WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
 GROUP BY u.name, u.username, u.location, u.tweet_count, u.listed_count, u.followers_count, u.following_count,
          u.created_at, u.verified, u.description, ti.twitter_author_id
 ORDER BY num_cdr_tweets DESC
-LIMIT 20;
+LIMIT 200;
 
+
+-- Users with most CDR tweets (incl per technology count)
+WITH user_tweets as (SELECT ti.item_id,
+                            ti.twitter_id,
+                            ti.twitter_author_id,
+                            u.tweet_count,
+                            u.listed_count,
+                            u.followers_count,
+                            u.following_count,
+                            u.name,
+                            u.username,
+                            u.location,
+                            u.created_at,
+                            u.verified,
+                            u.description,
+                            ti.referenced_tweets = 'null' as is_orig
+                     FROM twitter_item ti,
+                          jsonb_to_record(ti."user") as u (
+                                                           "name" text,
+                                                           "username" text,
+                                                           "location" text,
+                                                           "tweet_count" int,
+                                                           "listed_count" int,
+                                                           "followers_count" int,
+                                                           "following_count" int,
+                                                           "created_at" timestamp,
+                                                           "verified" bool,
+                                                           "description" text
+                              )
+                     WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3')
+SELECT ut.twitter_author_id,
+       ut.username,
+       -- Number of tweets matching any CDR query
+       count(DISTINCT ut.twitter_id)                                  as num_cdr_tweets,
+       -- Tweets that are actually written and not just retweeted or quoted
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )      as num_orig_cdr_tweets,
+       -- Total number of tweets by the user (as per Twitters profile information)
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)  as "Methane removal",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)  as "CCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)  as "Ocean fertilization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)  as "Ocean alkalinization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)  as "Enhanced weathering",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)  as "Biochar",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)  as "Afforestation/reforestation",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)  as "Ecosystem restoration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)  as "Soil carbon sequestration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)  as "BECCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10) as "Blue carbon",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11) as "Direct air capture",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12) as "GGR (general)",
+       ut.tweet_count,
+       ut.listed_count,
+       ut.followers_count,
+       ut.following_count,
+       ut.name,
+       ut.location,
+       min(ut.created_at)                                             as earliest_cdr_tweet,
+       max(ut.created_at)                                             as latest_cdr_tweet,
+       ut.created_at,
+       ut.verified,
+       ut.description
+FROM user_tweets ut
+         LEFT JOIN bot_annotation ba on (ut.item_id = ba.item_id
+    AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+    AND ba.key = 'tech')
+GROUP BY ut.name, ut.username, ut.location, ut.tweet_count, ut.listed_count, ut.followers_count, ut.following_count,
+         ut.created_at, ut.verified, ut.description, ut.twitter_author_id
+ORDER BY num_cdr_tweets DESC
+LIMIT 200;
+
+-- Number of tweets per query for a specific user
+SELECT ti.twitter_author_id          as user_id,
+       ti."user" -> 'username'       as username,
+       ba.key                        as tech_category,
+       ba.value_int                  as subquery,
+       count(DISTINCT ti.twitter_id) as num_tweets
+FROM twitter_item ti
+         LEFT JOIN bot_annotation ba on (ti.item_id = ba.item_id
+    AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+    AND ba.key <> 'tech')
+WHERE ti.twitter_author_id = '2863574275'
+GROUP BY user_id, username, tech_category, subquery
+ORDER BY num_tweets DESC;
+
+
+-- Sentiment counts for the users with the most CDR tweets
+SELECT ti.twitter_author_id                                            as user_id,
+       ti."user" -> 'username'                                         as username,
+       count(DISTINCT ti.twitter_id)                                   as num_cdr_tweets,
+       count(DISTINCT ti.twitter_id) FILTER ( WHERE ba.value_int = 0 ) as num_neg,
+       count(DISTINCT ti.twitter_id) FILTER ( WHERE ba.value_int = 1 ) as num_neu,
+       count(DISTINCT ti.twitter_id) FILTER ( WHERE ba.value_int = 2 ) as num_pos
+FROM twitter_item ti
+         LEFT JOIN bot_annotation ba on (ti.item_id = ba.item_id
+    AND ba.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
+    AND ba.key = 'senti'
+    AND ba.repeat = 1)
+-- WHERE ti.twitter_author_id = '2863574275'
+GROUP BY user_id, username
+ORDER BY num_cdr_tweets DESC
+LIMIT 200;
+
+-- Tweets with a certain primary sentiment of a specific user
+WITH r as (SELECT DISTINCT ON (ti.twitter_id) ti.twitter_author_id    as user_id,
+                                   ti.twitter_id           as tweet_id,
+                                   ti."user" -> 'username' as username,
+                                   ti.created_at           as posted,
+                                   i.text                  as tweet
+FROM twitter_item ti
+         LEFT JOIN item i on i.item_id = ti.item_id
+         LEFT JOIN bot_annotation ba on (ti.item_id = ba.item_id
+    AND ba.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
+    AND ba.key = 'senti'
+    AND ba.repeat = 1)
+WHERE ti.twitter_author_id IN ('2863574275', '917421961', '3164575344', '610232748')
+  AND ba.value_int = 0)
+SELECT * FROM r
+ORDER BY posted
+LIMIT 200;

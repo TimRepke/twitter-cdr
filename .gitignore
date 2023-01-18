@@ -10,7 +10,6 @@ data/
 **/.env
 .python-version
 *.code-workspace
-figures/
 
 /viewer/layers/
 *.json
