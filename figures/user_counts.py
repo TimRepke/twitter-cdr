@@ -37,6 +37,13 @@ class LogLevel(str, Enum):
     ERROR = 'ERROR'
 
 
+class CumCount(BaseModel):
+    bucket: datetime
+    cum_tweets: int
+    cum_users: int
+    tpu: float | None
+
+
 class UserTweetCounts(BaseModel):
     twitter_author_id: str
     username: str
@@ -68,7 +75,9 @@ def main(target_dir: str | None = None,
          bot_annotation_tech: str = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275',
          bot_annotation_senti: str = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111',
          smoothing_windowsize: int | None = None,
+         lookback_windowsize: str = '6 months',
          skip_cache: bool = False,
+         n_cols: int = 2,
          log_level: LogLevel = LogLevel.DEBUG):
     if target_dir is None:
         target_dir = Path(settings.DATA_FIGURES) / 'user_counts'
@@ -212,6 +221,7 @@ def main(target_dir: str | None = None,
         })
 
         obj_fields = set(UserTweetCounts.schema()['properties'].keys())
+
         def row_to_obj(row) -> UserTweetCounts:
             cp_counts = dict(row)
             cp_data = dict(row)
@@ -224,13 +234,136 @@ def main(target_dir: str | None = None,
 
         return [row_to_obj(r) for r in result]
 
-    def plot_heatmap(counts: list[UserTweetCounts], relative:bool):
+    def fetch_cumulative_counts() -> list[CumCount]:
+        query = text("""
+        WITH buckets as (SELECT generate_series(:start_time ::timestamp,
+                                                :end_time ::timestamp,
+                                                :resolution) as bucket)
+        SELECT b.bucket                                                                           as bucket,
+               count(DISTINCT ti.twitter_id)                                                      as cum_tweets,
+               count(DISTINCT ti.twitter_author_id)                                               as cum_users,
+               count(DISTINCT ti.twitter_id)::float / count(DISTINCT ti.twitter_author_id)::float as tpu
+        FROM buckets b
+                 LEFT JOIN twitter_item ti ON (
+                    ti.project_id = :project_id
+                AND ti.created_at < b.bucket)
+        GROUP BY bucket
+        ORDER BY bucket;
+        """)
+        result = query_cache.query(query, {
+            'start_time': start_time,
+            'end_time': end_time,
+            'resolution': interval,
+            'project_id': project_id
+        })
+        return [CumCount.parse_obj(r) for r in result]
+
+    def fetch_cumulative_counts_window() -> list[CumCount]:
+        query = text("""
+        WITH buckets as (SELECT generate_series(:start_time ::timestamp,
+                                                :end_time ::timestamp,
+                                                :resolution) as bucket)
+        SELECT b.bucket                                                                           as bucket,
+               count(DISTINCT ti.twitter_id)                                                      as cum_tweets,
+               count(DISTINCT ti.twitter_author_id)                                               as cum_users,
+               count(DISTINCT ti.twitter_id)::float / count(DISTINCT ti.twitter_author_id)::float as tpu
+        FROM buckets b
+                 LEFT JOIN twitter_item ti ON (
+                    ti.project_id = :project_id
+                AND ti.created_at >= (b.bucket - :window_size ::interval)
+                AND ti.created_at < b.bucket)
+        GROUP BY bucket
+        ORDER BY bucket;
+        """)
+        result = query_cache.query(query, {
+            'start_time': start_time,
+            'end_time': end_time,
+            'resolution': interval,
+            'window_size': lookback_windowsize,
+            'project_id': project_id
+        })
+        return [CumCount.parse_obj(r) for r in result]
+
+    def fetch_cumulative_counts_tech(technology: int) -> list[CumCount]:
+        query = text("""
+        WITH buckets as (SELECT generate_series(:start_time ::timestamp,
+                                                :end_time ::timestamp,
+                                                :resolution) as bucket),
+             labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                        twitter_item.twitter_author_id,
+                                                                                        twitter_item.twitter_id,
+                                                                                        ba_tech.value_int as technology
+                        FROM twitter_item
+                                 LEFT OUTER JOIN bot_annotation ba_tech on (
+                                    twitter_item.item_id = ba_tech.item_id
+                                AND ba_tech.bot_annotation_metadata_id = :ba_tech
+                                AND ba_tech.key = 'tech')
+                        WHERE twitter_item.project_id = :project_id
+                          AND ba_tech.value_int = :technology)
+        SELECT b.bucket                                                                         as bucket,
+               count(DISTINCT l.twitter_id)                                                     as cum_tweets,
+               count(DISTINCT l.twitter_author_id)                                              as cum_users,
+               count(DISTINCT l.twitter_id)::float / nullif(count(DISTINCT l.twitter_author_id)::float, 0) as tpu
+        FROM buckets b
+                 LEFT JOIN labels l ON (l.created_at < b.bucket)
+        GROUP BY bucket
+        ORDER BY bucket;
+        """)
+        result = query_cache.query(query, {
+            'start_time': start_time,
+            'end_time': end_time,
+            'resolution': interval,
+            'project_id': project_id,
+            'ba_tech': bot_annotation_tech,
+            'technology': technology
+        })
+        return [CumCount.parse_obj(r) for r in result]
+
+    def fetch_cumulative_window_counts_tech(technology: int) -> list[CumCount]:
+        query = text("""
+        WITH buckets as (SELECT generate_series(:start_time ::timestamp,
+                                                :end_time ::timestamp,
+                                                :resolution) as bucket),
+             labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                        twitter_item.twitter_author_id,
+                                                                                        twitter_item.twitter_id,
+                                                                                        ba_tech.value_int as technology
+                        FROM twitter_item
+                                 LEFT OUTER JOIN bot_annotation ba_tech on (
+                                    twitter_item.item_id = ba_tech.item_id
+                                AND ba_tech.bot_annotation_metadata_id = :ba_tech
+                                AND ba_tech.key = 'tech')
+                        WHERE twitter_item.project_id = :project_id
+                          AND ba_tech.value_int = :technology)
+        SELECT b.bucket                                                                         as bucket,
+               count(DISTINCT l.twitter_id)                                                     as cum_tweets,
+               count(DISTINCT l.twitter_author_id)                                              as cum_users,
+               count(DISTINCT l.twitter_id)::float / nullif(count(DISTINCT l.twitter_author_id)::float, 0) as tpu
+        FROM buckets b
+                 LEFT JOIN labels l ON (
+                        l.created_at >= (b.bucket - :window_size ::interval)
+                    AND l.created_at < b.bucket)
+        GROUP BY bucket
+        ORDER BY bucket;
+        """)
+        result = query_cache.query(query, {
+            'start_time': start_time,
+            'end_time': end_time,
+            'resolution': interval,
+            'project_id': project_id,
+            'ba_tech': bot_annotation_tech,
+            'technology': technology,
+            'window_size': lookback_windowsize
+        })
+        return [CumCount.parse_obj(r) for r in result]
+
+    def plot_heatmap(counts: list[UserTweetCounts], relative: bool):
         users = [d.username for d in counts]
         technologies = list(counts[0].counts.keys())
         num_tweets = np.array([d.num_cdr_tweets for d in counts], dtype=float)
         num_tech = np.array([list(d.counts.values()) for d in counts], dtype=float).T
 
-        fig, ax = plt.subplots(figsize=(8,20), dpi=150)
+        fig, ax = plt.subplots(figsize=(8, 20), dpi=150)
         if relative:
             shares = np.divide(num_tech, num_tweets, out=np.zeros_like(num_tech), where=num_tweets != 0)
             im = ax.imshow(shares.T, cmap='YlOrRd')
@@ -249,12 +382,121 @@ def main(target_dir: str | None = None,
         fig.tight_layout()
         return fig
 
+    def plot_cum(counts: list[CumCount]) -> plt.Figure:
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5), dpi=150)
+        dates = [c.bucket for c in counts]
+        n_users = [c.cum_users for c in counts]
+        n_tweets = [c.cum_tweets for c in counts]
+        tpu = np.array([c.tpu for c in counts])
+
+        ax[0].plot(dates, n_users, label='Number of users')
+        ax[0].plot(dates, n_tweets, label='Number of tweets')
+        ax[0].set_xlim(dates[0], dates[-1])
+        ax[0].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax[0].legend()
+
+        ax[1].plot(dates, tpu, label='Tweets per user')
+        ax[1].set_xlim(dates[0], dates[-1])
+        ax[1].set_ylim(1, np.max(tpu))
+        ax[1].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax[1].legend()
+
+        fig.autofmt_xdate()
+
+        # box = ax[0].get_position()
+        # ax[0].set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        # ax_handles, ax_labels = ax.get_legend_handles_labels()
+        # ax.legend(ax_handles[::-1], ax_labels[::-1], loc='center left', bbox_to_anchor=(1, 0.5))
+        fig.tight_layout()
+        return fig
+
+    def plot_cums(tech_counts: list[list[CumCount]], share_y: bool) -> plt.Figure:
+        n_rows = int(np.ceil(len(queries) / n_cols))
+        logger.info(f'Creating aggregate figure with {n_rows} rows and {n_cols} columns.')
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 3 * n_rows), dpi=150, sharey=share_y)
+
+        technologies = list(queries.keys())
+        dates = [c.bucket for c in tech_counts[0]]
+
+        for i, (technology, counts) in enumerate(zip(technologies, tech_counts)):
+            row = i // n_cols
+            col = i % n_cols
+            logger.debug(f' -> plotting {technology} to row {row}; column {col}')
+            ax = axes[row][col]
+            ax.set_title(technology)
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+
+            n_users = [c.cum_users for c in counts]
+            n_tweets = [c.cum_tweets for c in counts]
+            tpu = np.array([c.tpu for c in counts], dtype=float)
+            tpu = np.nan_to_num(tpu, nan=np.nanmedian(tpu))
+
+            ax.plot(dates, n_users, label='Number of users')
+            ax.plot(dates, n_tweets, label='Number of tweets')
+            ax.set_xlim(dates[0], dates[-1])
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+
+            subax = ax.twinx()
+            subax.plot(dates, tpu, label='Tweets per user', color='r')
+            subax.set_ylim(1, np.max(tpu))
+
+            ax.legend()
+            subax.legend()
+        # axes[n_rows - 1][n_cols - 1].legend()
+        fig.autofmt_xdate()
+
+        # box = ax[0].get_position()
+        # ax[0].set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        # ax_handles, ax_labels = ax.get_legend_handles_labels()
+        # ax.legend(ax_handles[::-1], ax_labels[::-1], loc='center left', bbox_to_anchor=(1, 0.5))
+        fig.tight_layout()
+        return fig
 
     logger.info('Fetching tweet counts per technology of top users...')
     data = fetch_user_tweet_counts()
     figure = plot_heatmap(data, relative=True)
-    figure.show()
-    # show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_abs_tech_all')
+    show_save(figure, target_dir / 'technologies' / f'top_200_heatmap')
+
+    logger.info('Fetching cumulative (sliding window) numbers...')
+    data = fetch_cumulative_counts_window()
+    figure = plot_cum(data)
+    figure.suptitle(f'Tweets per user measured every {resolution.value} looking back {lookback_windowsize}')
+    figure.tight_layout()
+    show_save(figure,
+              target_dir / 'cumulative' /
+              f'lines_{resolution.value}_sliding_{lookback_windowsize.replace(" ", "")}')
+
+    logger.info('Fetching cumulative numbers...')
+    data = fetch_cumulative_counts()
+    figure = plot_cum(data)
+    figure.suptitle(f'Cumulative tweets/users resolution {resolution.value}')
+    figure.tight_layout()
+    show_save(figure, target_dir / 'cumulative' / f'lines_{resolution.value}')
+
+    logger.info('Cumulative numbers per technology...')
+    data_acc = []
+    for ti, technology_name in enumerate(queries.keys()):
+        logger.debug(f' - fetching for ({ti}) {technology_name}')
+        data = fetch_cumulative_counts_tech(ti)
+        data_acc.append(data)
+    figure = plot_cums(data_acc, share_y=False)
+    figure.suptitle(f'Cumulative tweets/users looking back each "{interval}"\n')
+    figure.tight_layout()
+    show_save(figure, target_dir / 'cumulative' / f'all_lines_{resolution.value}')
+
+    logger.info('Cumulative numbers withing sliding window per technology...')
+    data_acc = []
+    for ti, technology_name in enumerate(queries.keys()):
+        logger.debug(f' - fetching for ({ti}) {technology_name}')
+        data = fetch_cumulative_window_counts_tech(ti)
+        data_acc.append(data)
+    figure = plot_cums(data_acc, share_y=False)
+    figure.suptitle(f'Cumulative tweets/users looking back each "{interval}" for {lookback_windowsize}\n')
+    figure.tight_layout()
+    show_save(figure,
+              target_dir / 'cumulative' /
+              f'all_lines_{resolution.value}_sliding_{lookback_windowsize.replace(" ", "")}')
 
 
 if __name__ == "__main__":

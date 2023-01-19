@@ -6,8 +6,10 @@
 -- Sentiment and emotion annotation scheme: 8d5d899f-b615-4962-b468-d95893df0921
 -- Sentiment bot annotations: e63da0c9-9bb5-4026-ab5e-7d5845cdc111
 
--- Number of tweets in the project
-SELECT count(1) as num_tweets
+-- Number of tweets and users in the project (incl. avg num tweets per user)
+SELECT count(DISTINCT ti.twitter_id)                                                      as num_tweets,
+       count(DISTINCT ti.twitter_author_id)                                               as num_users,
+       count(DISTINCT ti.twitter_id)::float / count(DISTINCT ti.twitter_author_id)::float as tweets_per_user
 FROM twitter_item ti
 WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3';
 
@@ -308,3 +310,192 @@ FROM twitter_item ti
          LEFT JOIN technologies t ON t.item_id = ti.item_id
 WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
 LIMIT 10;
+
+
+-- URLs in tweets
+SELECT ti.twitter_id, jsonb_path_query(ti.urls, '$[*].url_expanded')
+FROM twitter_item ti
+WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+LIMIT 100;
+
+
+WITH urls as (SELECT ti."user" ->> 'username'                       as username,
+                     jsonb_path_query(ti.urls, '$[*].url_expanded') as url
+              FROM twitter_item ti
+              WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3')
+SELECT username, url, count(1) AS num_tweeted
+FROM urls
+GROUP BY username, url
+LIMIT 10;
+
+
+WITH urls as (SELECT ti."user" -> 'username'                        as username,
+                     jsonb_path_query(ti.urls, '$[*].url_expanded') as url
+              FROM twitter_item ti
+              WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'),
+     uu_cnt as (SELECT username, url, count(1) AS num_tweeted
+                FROM urls
+                GROUP BY username, url)
+SELECT url, json_object_agg(username, num_tweeted) AS user_stats
+FROM uu_cnt
+GROUP BY url
+LIMIT 10;
+
+SELECT uci.url,
+       json_object_agg(uci.username, uci.num_tweeted) AS user_stats
+FROM (SELECT u.username, u.url, count(1) AS num_tweeted
+      FROM (SELECT ti."user" ->> 'username'                       as username,
+                   jsonb_path_query(ti.urls, '$[*].url_expanded') as url
+            FROM twitter_item ti
+            WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3') u
+      GROUP BY u.username, u.url) uci
+GROUP BY uci.url
+LIMIT 10;
+
+-- Repeated URLs in tweets
+WITH urls as (SELECT ti.twitter_id,
+                     ti.twitter_author_id,
+                     ti.created_at,
+                     ti."user" ->> 'username'                       as username,
+                     jsonb_path_query(ti.urls, '$[*].url_expanded') as url
+              FROM twitter_item ti
+              WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3')
+SELECT urls.url,
+       count(DISTINCT twitter_id)                                             as num_tweets,
+       count(DISTINCT twitter_author_id)                                      as num_users,
+       min(created_at)                                                        as first_posted,
+       max(created_at)                                                        as last_posted,
+       EXTRACT(epoch FROM (max(created_at) - min(created_at))) / 60 / 60 / 24 as lifetime_days,
+       justify_interval(max(created_at) - min(created_at))                    as lifetime
+--        array_agg(DISTINCT urls.username)                                      as users,
+--        array_agg(urls.username)                                               as users,
+--        array_agg(DISTINCT twitter_id)                                         as tweet_ids,
+--        array_agg(created_at)                                                  as dates_posted
+FROM urls
+GROUP BY urls.url
+ORDER BY num_tweets DESC
+LIMIT 200;
+
+-- Repeated URLs (stripped to hostname) in tweets
+WITH urls as (SELECT ti.twitter_id,
+                     ti.twitter_author_id,
+                     ti.created_at,
+                     ti."user" ->> 'username'                       as username,
+                     jsonb_path_query(ti.urls, '$[*].url_expanded') as url
+              FROM twitter_item ti
+              WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3')
+SELECT split_part(url::text, '/', 3)                                          as base_url,
+       count(DISTINCT twitter_id)                                             as num_tweets,
+       count(DISTINCT url)                                                    as num_urls,
+       count(DISTINCT twitter_author_id)                                      as num_users,
+       min(created_at)                                                        as first_posted,
+       max(created_at)                                                        as last_posted,
+       EXTRACT(epoch FROM (max(created_at) - min(created_at))) / 60 / 60 / 24 as lifetime_days,
+       justify_interval(max(created_at) - min(created_at))                    as lifetime
+--        array_agg(DISTINCT urls.username)                                      as users,
+--        array_agg(urls.username)                                               as users,
+--        array_agg(DISTINCT twitter_id)                                         as tweet_ids,
+--        array_agg(created_at)                                                  as dates_posted
+FROM urls
+GROUP BY split_part(url::text, '/', 3)
+ORDER BY num_tweets DESC
+LIMIT 200;
+
+
+-- Cumulative user and tweet numbers
+WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '1 week') as bucket)
+SELECT b.bucket                                                                           as bucket,
+       count(DISTINCT ti.twitter_id)                                                      as cum_tweets,
+       count(DISTINCT ti.twitter_author_id)                                               as cum_users,
+       count(DISTINCT ti.twitter_id)::float / count(DISTINCT ti.twitter_author_id)::float as tpu
+FROM buckets b
+         LEFT JOIN twitter_item ti ON (ti.created_at < b.bucket)
+GROUP BY bucket
+ORDER BY bucket;
+
+-- Cumulative user and tweet numbers
+WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '1 month') as bucket)
+SELECT b.bucket                                                                           as bucket,
+       count(DISTINCT ti.twitter_id)                                                      as cum_tweets,
+       count(DISTINCT ti.twitter_author_id)                                               as cum_users,
+       count(DISTINCT ti.twitter_id)::float / count(DISTINCT ti.twitter_author_id)::float as tpu
+FROM buckets b
+         LEFT JOIN twitter_item ti ON (
+            ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+        AND ti.created_at < b.bucket)
+GROUP BY bucket
+ORDER BY bucket;
+
+
+-- User and tweet numbers with sliding window
+WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '1 week') as bucket)
+SELECT b.bucket                                                                           as bucket,
+       count(DISTINCT ti.twitter_id)                                                      as cum_tweets,
+       count(DISTINCT ti.twitter_author_id)                                               as cum_users,
+       count(DISTINCT ti.twitter_id)::float / count(DISTINCT ti.twitter_author_id)::float as tpu
+FROM buckets b
+         LEFT JOIN twitter_item ti ON (
+            ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+        AND ti.created_at >= (b.bucket - '6 months'::interval)
+        AND ti.created_at < b.bucket)
+WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+GROUP BY bucket
+ORDER BY bucket;
+
+
+-- Cumulative user and tweet numbers for a technology
+WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '3 months') as bucket),
+     labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                twitter_item.twitter_author_id,
+                                                                                twitter_item.twitter_id,
+                                                                                ba_tech.value_int as technology
+                FROM twitter_item
+                         LEFT OUTER JOIN bot_annotation ba_tech on (
+                            twitter_item.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech')
+                WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                  AND ba_tech.value_int = 1)
+SELECT b.bucket                                                                         as bucket,
+       count(DISTINCT l.twitter_id)                                                     as cum_tweets,
+       count(DISTINCT l.twitter_author_id)                                              as cum_users,
+       count(DISTINCT l.twitter_id)::float / count(DISTINCT l.twitter_author_id)::float as tpu
+FROM buckets b
+         LEFT JOIN labels l ON (l.created_at < b.bucket)
+GROUP BY bucket
+ORDER BY bucket;
+
+
+-- Cumulative user and tweet numbers within sliding window for a technology
+WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '3 months') as bucket),
+     labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                twitter_item.twitter_author_id,
+                                                                                twitter_item.twitter_id,
+                                                                                ba_tech.value_int as technology
+                FROM twitter_item
+                         LEFT OUTER JOIN bot_annotation ba_tech on (
+                            twitter_item.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech')
+                WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                  AND ba_tech.value_int = 1)
+SELECT b.bucket                                                                         as bucket,
+       count(DISTINCT l.twitter_id)                                                     as cum_tweets,
+       count(DISTINCT l.twitter_author_id)                                              as cum_users,
+       count(DISTINCT l.twitter_id)::float / count(DISTINCT l.twitter_author_id)::float as tpu
+FROM buckets b
+         LEFT JOIN labels l ON (
+            l.created_at >= (b.bucket - '6 months'::interval)
+        AND l.created_at < b.bucket)
+GROUP BY bucket
+ORDER BY bucket;
