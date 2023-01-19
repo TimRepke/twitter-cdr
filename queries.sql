@@ -266,18 +266,45 @@ LIMIT 200;
 
 -- Tweets with a certain primary sentiment of a specific user
 WITH r as (SELECT DISTINCT ON (ti.twitter_id) ti.twitter_author_id    as user_id,
-                                   ti.twitter_id           as tweet_id,
-                                   ti."user" -> 'username' as username,
-                                   ti.created_at           as posted,
-                                   i.text                  as tweet
-FROM twitter_item ti
-         LEFT JOIN item i on i.item_id = ti.item_id
-         LEFT JOIN bot_annotation ba on (ti.item_id = ba.item_id
-    AND ba.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
-    AND ba.key = 'senti'
-    AND ba.repeat = 1)
-WHERE ti.twitter_author_id IN ('2863574275', '917421961', '3164575344', '610232748')
-  AND ba.value_int = 0)
-SELECT * FROM r
+                                              ti.twitter_id           as tweet_id,
+                                              ti."user" -> 'username' as username,
+                                              ti.created_at           as posted,
+                                              i.text                  as tweet
+           FROM twitter_item ti
+                    LEFT JOIN item i on i.item_id = ti.item_id
+                    LEFT JOIN bot_annotation ba on (ti.item_id = ba.item_id
+               AND ba.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
+               AND ba.key = 'senti'
+               AND ba.repeat = 1)
+           WHERE ti.twitter_author_id IN ('2863574275', '917421961', '3164575344', '610232748')
+             AND ba.value_int = 0)
+SELECT *
+FROM r
 ORDER BY posted
 LIMIT 200;
+
+
+-- Data export
+WITH sentiments AS (SELECT item_id,
+                           json_agg(ba.value_int)  as sentiment,
+                           json_agg(ba.confidence) as sentiment_score
+                    FROM bot_annotation ba
+                    WHERE ba.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
+                      AND ba.key = 'senti'
+                    GROUP BY item_id),
+     technologies AS (SELECT ba.item_id,
+                             json_agg(json_build_object(
+                                     'tech', ba.value_int,
+                                     'query', sub.value_int)) as technologies
+                      FROM bot_annotation ba
+                               LEFT JOIN bot_annotation sub ON sub.parent = ba.bot_annotation_id
+                      WHERE ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba.key = 'tech'
+                      GROUP BY ba.item_id)
+SELECT ti.*, i.text, s.sentiment, s.sentiment_score, t.technologies
+FROM twitter_item ti
+         LEFT JOIN item i on i.item_id = ti.item_id
+         LEFT JOIN sentiments s ON s.item_id = ti.item_id
+         LEFT JOIN technologies t ON t.item_id = ti.item_id
+WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+LIMIT 10;
