@@ -1,14 +1,11 @@
-import inspect
 import logging
 from enum import Enum
 from pathlib import Path
 from datetime import datetime
-from typing import Sequence, Any
 
 import typer
 from pydantic import BaseModel
-from sqlalchemy import text, TextClause, RowMapping
-from sqlalchemy.orm import Session
+from sqlalchemy import text
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.dates as mdates
@@ -17,6 +14,7 @@ from nacsos_data.db import DatabaseEngine
 
 from common.config import settings
 from common.db_cache import QueryCache
+from common.events import events
 from common.queries import queries
 
 
@@ -244,6 +242,51 @@ def main(target_dir: str | None = None,
         fig.tight_layout()
         return fig
 
+    def plot_temporal_count_split(counts: list[TechnologyCounts], smoothing: bool = False,
+                                  events_plt: list[str] = None):
+        dates = [d.bucket for d in counts]
+        technologies = list(counts[0].counts.keys())
+        fig, axes = plt.subplots(nrows=len(technologies) + 1, ncols=1, figsize=(12, 3 * len(technologies) + 1), dpi=200)
+        sm = f', smoothed across {smoothing_windowsize} intervals' if smoothing else ''
+        fig.suptitle(f'Tweet counts (aggregation interval "{interval}"{sm})\n\n\n')
+
+        def draw_ax(ax, dat: np.ndarray, label: str):
+            ax.set_title(label)
+            ax.plot(dates, dat, label=label)
+            ax.set_xlim(dates[0], dates[-1])
+
+            # ax.xaxis.set_major_locator(mdates.YearLocator())
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            ax.xaxis.set_minor_locator(mdates.MonthLocator(interval=1))
+
+            locator = mdates.YearLocator()
+            locator.set_axis(ax.xaxis)
+            for yr in locator():
+                ax.axvline(x=yr, ls=':', color='lightgrey', linewidth=1)
+
+            if events_plt is not None:
+                for ev in events_plt:
+                    event = events[ev]
+                    if dates[0].date() <= event.date_start <= dates[-1].date():
+                        ax.text(x=event.date_start, y=dat.max() * 0.98,
+                                s=event.name, rotation=90, fontsize=7, va='top', ha='right')
+                        ax.axvline(x=event.date_start, ls='-', color='lightgrey', linewidth=1)
+
+            ax.grid(which='major', axis='y', ls=':', color='lightgrey', linewidth=1)
+
+        for ti, t in enumerate(technologies):
+            if smoothing:
+                draw_ax(axes[ti], smooth([[d.counts[t] for d in counts]])[0], t)
+            else:
+                draw_ax(axes[ti], np.array([d.counts[t] for d in counts]), t)
+
+        draw_ax(axes[len(technologies)], np.array([d.num_tweets for d in counts]), 'Total')
+
+        fig.autofmt_xdate()
+        fig.tight_layout()
+        return fig
+
     def plot_temporal_count_stacked(counts: list[TechnologyCounts], relative: bool):
         dates = [d.bucket for d in counts]
         technologies = list(counts[0].counts.keys())
@@ -370,6 +413,10 @@ def main(target_dir: str | None = None,
     data = fetch_tech_counts()
 
     logger.debug(' > Creating line plot for tweet counts per technology...')
+    figure = plot_temporal_count_split(data, events_plt=list(events.keys()))
+    show_save(figure, target_dir / 'counts_temporal' / f'tweets_line_split_events_{resolution.value}_all')
+    figure = plot_temporal_count_split(data)
+    show_save(figure, target_dir / 'counts_temporal' / f'tweets_line_split_{resolution.value}_all')
     figure = plot_temporal_count(data)
     show_save(figure, target_dir / 'counts_temporal' / f'tweets_line_{resolution.value}_all')
     figure = plot_temporal_count_stacked(data, relative=False)

@@ -21,6 +21,11 @@ WHERE key = 'senti'
   AND bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
 GROUP BY value_int;
 
+-- Number of tweets per language
+SELECT language, count(1) as num_tweets
+FROM twitter_item
+GROUP BY language
+ORDER BY num_tweets DESC;
 
 -- Temporal histogram (1-day resolution) of tweet counts
 WITH buckets as (SELECT to_char(generate_series('2006-01-01 00:00'::timestamp,
@@ -499,3 +504,70 @@ FROM buckets b
         AND l.created_at < b.bucket)
 GROUP BY bucket
 ORDER BY bucket;
+
+
+-- Hashtags within a certain time window
+WITH labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                twitter_item.twitter_author_id,
+                                                                                twitter_item.twitter_id,
+                                                                                jsonb_array_elements(
+                                                                                        CASE
+                                                                                            WHEN twitter_item.hashtags = 'null'
+                                                                                                THEN '[
+                                                                                              null
+                                                                                            ]'::jsonb
+                                                                                            ELSE
+                                                                                                twitter_item.hashtags END) ->>
+                                                                                'tag'             as tag,
+                                                                                ba_tech.value_int as technology
+                FROM twitter_item
+                         LEFT JOIN bot_annotation ba_tech on (
+                            twitter_item.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech')
+                WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+--                   AND ba_tech.value_int = 1
+                  AND twitter_item.created_at > '2018-01-01'::timestamp - '5 week'::interval
+                  AND twitter_item.created_at < '2018-01-01'::timestamp + '5 week'::interval)
+SELECT tag,
+       count(DISTINCT twitter_id)                                as num_tweets,
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane removal",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 1)  as "CCS",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean fertilization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean alkalinization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced weathering",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 5)  as "Biochar",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/reforestation",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem restoration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil carbon sequestration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 9)  as "BECCS",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue carbon",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct air capture",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
+FROM labels
+GROUP BY tag
+ORDER BY num_tweets DESC
+LIMIT 50;
+
+
+-- Select tweets with a specific hashtag
+SELECT i.text, ti.*
+FROM twitter_item ti
+         LEFT JOIN item i on i.item_id = ti.item_id
+WHERE ti.hashtags @> '[{"tag": "geoingenieria"}]'
+LIMIT 10;
+
+
+SELECT distinct on (ti.twitter_id) ti.created_at,
+                                   ti.twitter_id                                              as twitter_id,
+                                   ti.hashtags                                                as hashtags,
+                                   i.text                                                     as text,
+                                   array_agg(ba.value_int) OVER ( PARTITION BY ti.twitter_id) as technology
+FROM twitter_item ti
+         LEFT JOIN item i on i.item_id = ti.item_id
+         LEFT JOIN bot_annotation ba on ti.item_id = ba.item_id
+WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+  AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+  AND ba.key = 'tech'
+  AND ti.hashtags @> '[{"tag": "CCS"}]'
+LIMIT 50;

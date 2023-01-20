@@ -2,7 +2,7 @@
 # https://docs.google.com/spreadsheets/d/1xvLcqCZ-fVhkOBkH3E3wpuR4h3VOtWFdO9z3atRPK9k/edit#gid=1389523714
 
 queries = {
-    'Methane removal': [
+    'Methane Removal': [
         {'qid': 'c_18', 'query': '"methane direct air capture"'},
         {'qid': 'c_19', 'query': '"methane capture"'},
         {'qid': 'c_54', 'query': 'methane removing atmosphere'},
