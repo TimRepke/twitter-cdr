@@ -9,6 +9,7 @@ from sqlalchemy import text
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.dates as mdates
+import plotly.graph_objects as go
 
 from nacsos_data.db import DatabaseEngine
 
@@ -46,6 +47,9 @@ class UserTweetCounts(BaseModel):
     username: str
     num_cdr_tweets: int
     num_orig_cdr_tweets: int
+    num_tweets: int
+    perc_orig: float
+    perc_cdr: float
     tweet_count: int
     listed_count: int
     followers_count: int
@@ -68,6 +72,7 @@ def main(target_dir: str | None = None,
          export_png: bool = True,
          export_pdf: bool = False,
          export_svg: bool = False,
+         export_html: bool = False,
          project_id: str | None = None,
          bot_annotation_tech: str = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275',
          bot_annotation_senti: str = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111',
@@ -128,6 +133,21 @@ def main(target_dir: str | None = None,
         else:
             plt.close(fig)
 
+    def show_savely(fig: go.Figure, target: Path):
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        if export_png:
+            fig.write_image(str(target) + '.png', format='png')
+        if export_svg:
+            fig.write_image(str(target) + '.svg', format='svg')
+        if export_pdf:
+            fig.write_image(str(target) + '.pdf', format='pdf')
+        if export_html:
+            fig.write_html(str(target) + '.html', auto_open=False)
+
+        if show:
+            fig.show()
+
     def smooth(array, with_pad=True) -> np.ndarray:
         if smoothing_windowsize is None:
             return array
@@ -141,7 +161,7 @@ def main(target_dir: str | None = None,
 
         return np.array([np.convolve(row, kernel, mode='valid') for row in array])
 
-    def fetch_user_tweet_counts() -> list[UserTweetCounts]:
+    def fetch_user_tweet_counts(limit: int) -> list[UserTweetCounts]:
         query = text("""
             WITH user_tweets as (SELECT ti.item_id,
                                         ti.twitter_id,
@@ -174,10 +194,14 @@ def main(target_dir: str | None = None,
             SELECT ut.twitter_author_id,
                    ut.username,
                    -- Number of tweets matching any CDR query
-                   count(DISTINCT ut.twitter_id)                                  as num_cdr_tweets,
+                   count(DISTINCT ut.twitter_id)                                      as num_cdr_tweets,
                    -- Tweets that are actually written and not just retweeted or quoted
-                   count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )      as num_orig_cdr_tweets,
+                   count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )          as num_orig_cdr_tweets,
                    -- Total number of tweets by the user (as per Twitters profile information)
+                   ut.tweet_count                                                     as num_tweets,
+                   (count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig ))::float /
+                   count(DISTINCT ut.twitter_id)::float * 100                         as perc_orig,
+                   count(DISTINCT ut.twitter_id)::float / ut.tweet_count::float * 100 as perc_cdr,
                    count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)  as "Methane removal",
                    count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)  as "CCS",
                    count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)  as "Ocean fertilization",
@@ -214,7 +238,7 @@ def main(target_dir: str | None = None,
         result = query_cache.query(query, {
             'project_id': project_id,
             'ba_tech': bot_annotation_tech,
-            'limit': 200
+            'limit': limit
         })
 
         obj_fields = set(UserTweetCounts.schema()['properties'].keys())
@@ -379,6 +403,35 @@ def main(target_dir: str | None = None,
         fig.tight_layout()
         return fig
 
+    def plot_bubbles(counts: list[UserTweetCounts], log_size: bool, lim: int | None = None):
+        users = [d.username for d in counts]
+        technologies = list(counts[0].counts.keys())
+        num_tweets = np.array([d.num_cdr_tweets for d in counts], dtype=float)
+        perc_cdr = np.array([d.perc_cdr for d in counts], dtype=float)
+        perc_orig = np.array([d.perc_orig for d in counts], dtype=float)
+        logger.debug(f'Min tweets: {num_tweets.min():,}; max tweets: {num_tweets.max():,}')
+        fig = go.Figure()
+        size = num_tweets / num_tweets.max() * 100
+        if log_size:
+            size = np.log(num_tweets)
+        if lim is not None:
+            size = np.clip(num_tweets, 0, lim) / lim * 100
+        fig.add_trace(go.Scatter(
+            x=perc_cdr,
+            y=perc_orig,
+            mode='markers',
+            marker={
+                'size': size
+            },
+            text=[f'{c.username} ({c.num_tweets:,} tweets, '
+                  f'{c.num_cdr_tweets:,} on CDR, '
+                  f'{c.num_orig_cdr_tweets:,} original)'
+                for c in counts]
+        ))
+        fig.update_xaxes(title_text='Percentage of CDR tweets by that user')
+        fig.update_yaxes(title_text='Percentage of original tweets by that user')
+        return fig
+
     def plot_cum(counts: list[CumCount]) -> plt.Figure:
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10, 5), dpi=150)
         dates = [c.bucket for c in counts]
@@ -451,9 +504,18 @@ def main(target_dir: str | None = None,
         return fig
 
     logger.info('Fetching tweet counts per technology of top users...')
-    data = fetch_user_tweet_counts()
+    data = fetch_user_tweet_counts(limit=201)
     figure = plot_heatmap(data, relative=True)
     show_save(figure, target_dir / 'technologies' / f'top_200_heatmap')
+
+    data = fetch_user_tweet_counts(limit=2000)
+    figure = plot_bubbles(data, log_size=False, lim=None)
+    show_savely(figure, target_dir / 'ratios' / f'tweet_ratios')
+    figure = plot_bubbles(data, log_size=True, lim=None)
+    show_savely(figure, target_dir / 'ratios' / f'tweet_ratios_log')
+    max_count = 800
+    figure = plot_bubbles(data, log_size=False, lim=max_count)
+    show_savely(figure, target_dir / 'ratios' / f'tweet_ratios_lim_{max_count}')
 
     logger.info('Fetching cumulative (sliding window) numbers...')
     data = fetch_cumulative_counts_window()
