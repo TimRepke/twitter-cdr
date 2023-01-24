@@ -410,6 +410,14 @@ GROUP BY split_part(url::text, '/', 3)
 ORDER BY num_tweets DESC
 LIMIT 200;
 
+-- Number of tweets with and without a URL
+SELECT
+    COUNT(DISTINCT ti.twitter_id) as "Number of tweets",
+    SUM(CASE WHEN ti.urls = 'null' THEN 0 ELSE 1 END) as "Tweets with URL",
+    SUM(CASE WHEN ti.urls = 'null' THEN 1 ELSE 0 END) as "Tweets w/o URL"
+FROM twitter_item ti
+WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3';
+
 
 -- Repeated URLs in tweets per technology
 WITH tweets as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
