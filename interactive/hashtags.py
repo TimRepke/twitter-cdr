@@ -3,10 +3,9 @@ import re
 from pathlib import Path
 import datetime
 
-from matplotlib import pyplot as plt
-import matplotlib.dates as mdates
+import plotly.graph_objects as go
 from pydantic import BaseModel
-from scipy.io.arff._arffread import test_weka
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from nacsos_data.db import DatabaseEngine
@@ -40,12 +39,38 @@ query_cache = QueryCache(
     db_engine=db_engine,
     skip_cache=False
 )
+technologies = list(queries.keys()) + ['Total']
 
 
 class TechnologyCounts(BaseModel):
     bucket: datetime.datetime
     Total: int
     counts: dict[str, int]
+
+
+def str2delta(s: str) -> datetime.timedelta:
+    reg = re.compile(r'[^0-9]')
+
+    def rec(sr: str):
+        if sr == '':
+            return datetime.timedelta(days=0)
+        num = int(reg.sub('', sr))
+        if 'week' in sr:
+            return datetime.timedelta(days=7 * num)
+        if 'month' in sr:
+            return datetime.timedelta(days=30 * num)
+        if 'day' in sr:
+            return datetime.timedelta(days=num)
+        if 'year' in sr:
+            return datetime.timedelta(days=365 * num)
+        return datetime.timedelta(days=0)
+
+    parts = s.split(' ')
+    td = datetime.timedelta(days=0)
+    for si in range(0, len(parts), 2):
+        td += rec(' '.join(parts[si:si + 2]))
+
+    return td
 
 
 st.set_page_config(layout='wide', page_title='Explore Tweets on hashtags over time')
@@ -57,13 +82,33 @@ with st.sidebar:
     resolution = st.selectbox('Count resolution',
                               options=('1 day', '1 week', '2 weeks', '1 month', '3 months', '1 year'),
                               index=1)
+    window = st.text_input('Time before and after selected centre', '6 years 6 months')
+    delta = str2delta(window)
+    st.write(f'... converts to *{delta}*')
 
     st.subheader('Settings for hashtag counts')
-    window = st.text_input('Time before and after selected centre', '1 week')
-    hashtag_limit = st.number_input('Limit to top ... hashtags', 50)
+    hashtag_limit = st.number_input('LIMIT (hashtags)', 50)
+    hashtag_order = st.selectbox('ORDER BY (hashtags)', options=technologies, index=len(technologies) - 1)
 
-    st.subheader('Settings for hashtag tweet search')
-    ht_page_size = st.number_input('Page size', 200)
+    st.subheader('Settings for tweet search')
+    tweet_limit = st.number_input('Page size', 200)
+
+    st.subheader('Settings for URL aggregation')
+    url_limit = st.number_input('LIMIT (top URLs)', 200)
+    domain_limit = st.number_input('LIMIT (top domains)', 200)
+    url_domain_order = st.selectbox('ORDER BY (domains/urls)', options=technologies, index=len(technologies) - 1)
+
+    st.subheader('Settings for user aggregation')
+    user_limit = st.number_input('LIMIT (top users)', 200)
+    user_order = st.selectbox('ORDER BY (top users)', options=technologies, index=len(technologies) - 1)
+
+current_center = st.slider('Investigation centre',
+                           min_value=datetime.datetime(date_start.year, date_start.month, date_start.day, 0, 0, 0),
+                           max_value=datetime.datetime(date_end.year, date_end.month, date_end.day, 23, 59, 59),
+                           value=datetime.datetime(2016, 6, 30, 12, 0, 0),
+                           step=datetime.timedelta(days=1))
+window_start = current_center - delta
+window_end = current_center + delta
 
 
 def fetch_tech_counts():
@@ -120,8 +165,8 @@ def fetch_tech_counts():
     return [row_to_obj(r) for r in result]
 
 
-def fetch_hashtag_counts(window_size: str, center: datetime.date, limit: int):
-    query = text("""
+def fetch_hashtag_counts():
+    query = text(f"""
         WITH labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
                                                                                         twitter_item.twitter_author_id,
                                                                                         twitter_item.twitter_id,
@@ -158,18 +203,117 @@ def fetch_hashtag_counts(window_size: str, center: datetime.date, limit: int):
                count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
         FROM labels
         GROUP BY tag
-        ORDER BY "Total" DESC
+        ORDER BY "{hashtag_order}" DESC
         LIMIT :limit;
         """)
 
     with db_engine.session() as session:  # type: Session
-        logger.debug(f'Fetching top hashtags around {center}')
+        logger.debug(f'Fetching top hashtags around {current_center}')
         res = session.execute(query, {
-            'limit': limit,
+            'limit': hashtag_limit,
             'project_id': project_id,
             'ba_tech': bot_annotation_tech,
-            'center': center,
-            'window': window_size
+            'center': current_center,
+            'window': window
+        })
+        return res.mappings().all()
+
+
+def fetch_domain_counts(full_url: bool):
+    select = "url" if full_url else "split_part(url, '/', 3)"
+
+    query = text(f"""
+        WITH tweets as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                        twitter_item.twitter_author_id,
+                                                                                        twitter_item.twitter_id,
+                                                                                        jsonb_array_elements(
+                                                                                                CASE WHEN twitter_item.urls = 'null'
+                                                                                                     THEN '[null]'::jsonb
+                                                                                                     ELSE twitter_item.urls END) ->> 'url_expanded' as url,
+                                                                                        ba_tech.value_int as technology
+                        FROM twitter_item
+                                 LEFT JOIN bot_annotation ba_tech on (
+                                    twitter_item.item_id = ba_tech.item_id
+                                AND ba_tech.bot_annotation_metadata_id = :ba_tech
+                                AND ba_tech.key = 'tech')
+                        WHERE twitter_item.project_id = :project_id
+                          AND twitter_item.created_at > :center ::timestamp - :window ::interval
+                          AND twitter_item.created_at < :center ::timestamp + :window ::interval)
+        SELECT {select}                                                  as url,
+               count(DISTINCT twitter_id)                                as "Total",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane Removal",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 1)  as "CCS",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean Fertilization",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean Alkalinization",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced Weathering",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 5)  as "Biochar",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/Reforestation",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem Restoration",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil carbon Sequestration",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 9)  as "BECCS",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue Carbon",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct Air Capture",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
+        FROM tweets
+        GROUP BY {select}
+        ORDER BY "{url_domain_order}" DESC
+        LIMIT :limit;
+        """)
+
+    with db_engine.session() as session:  # type: Session
+        logger.debug(f'Fetching top {"URLs" if full_url else "domains"} around {current_center}')
+        res = session.execute(query, {
+            'limit': url_limit if full_url else domain_limit,
+            'project_id': project_id,
+            'ba_tech': bot_annotation_tech,
+            'center': current_center,
+            'window': window
+        })
+        return res.mappings().all()
+
+
+def fetch_user_counts():
+    query = text(f"""
+        WITH tweets as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.twitter_id,
+                                                                                        twitter_item."user" ->> 'username' as username,
+                                                                                        ba_tech.value_int                  as technology
+                        FROM twitter_item
+                                 LEFT JOIN bot_annotation ba_tech on (
+                                    twitter_item.item_id = ba_tech.item_id
+                                AND ba_tech.bot_annotation_metadata_id = :ba_tech
+                                AND ba_tech.key = 'tech')
+                        WHERE twitter_item.project_id = :project_id
+                          AND twitter_item.created_at > :center ::timestamp - :window ::interval
+                          AND twitter_item.created_at < :center ::timestamp + :window ::interval)
+        SELECT username,
+               count(DISTINCT twitter_id)                                as "Total",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane Removal",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 1)  as "CCS",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean Fertilization",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean Alkalinization",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced Weathering",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 5)  as "Biochar",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/Reforestation",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem Restoration",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil carbon Sequestration",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 9)  as "BECCS",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue Carbon",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct Air Capture",
+               count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
+        FROM tweets
+        GROUP BY username
+        ORDER BY "{user_order}" DESC
+        LIMIT :limit;
+        """)
+
+    with db_engine.session() as session:  # type: Session
+        logger.debug(f'Fetching top users around {current_center}')
+        res = session.execute(query, {
+            'limit': user_limit,
+            'project_id': project_id,
+            'ba_tech': bot_annotation_tech,
+            'center': current_center,
+            'window': window
         })
         return res.mappings().all()
 
@@ -207,8 +351,8 @@ def fetch_tweets(hashtag: str):
     with db_engine.session() as session:  # type: Session
         logger.debug(f'Fetching tweets for "{hashtag}"')
         res = session.execute(query, {
-            'limit': ht_page_size,
-            'offset': st.session_state.ht_page * ht_page_size,
+            'limit': tweet_limit,
+            'offset': st.session_state.ht_page * tweet_limit,
             'project_id': project_id,
             'ba_tech': bot_annotation_tech,
             'techs': ht_technologies_int,
@@ -219,47 +363,19 @@ def fetch_tweets(hashtag: str):
         return res.mappings().all()
 
 
-def str2delta(s: str) -> datetime.timedelta:
-    reg = re.compile(r'[^0-9]')
-    num = int(reg.sub('', s))
-    if 'week' in s:
-        return datetime.timedelta(days=7 * num)
-    if 'month' in s:
-        return datetime.timedelta(days=30 * num)
-    if 'day' in s:
-        return datetime.timedelta(days=num)
-    if 'year' in s:
-        return datetime.timedelta(days=365 * num)
-    return datetime.timedelta(days=7)
-
-
-def plot_temporal_count(hist: pd.DataFrame, techs: list[str]):
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=200)
+def plot_temporal_countly(hist: pd.DataFrame, techs: list[str]):
+    fig = go.Figure()
 
     for tech in techs:
-        ax.plot(hist.index, hist[tech], label=tech)
+        fig.add_trace(go.Scatter(x=hist.index, y=hist[tech],
+                                 mode='lines',
+                                 name=tech))
 
-    ax.set_xlim(hist.index[0], hist.index[-1])
+    fig.add_vline(x=current_center, line_width=1, line_dash='dash', line_color='lightgrey')
+    fig.add_vrect(x0=window_start,
+                  x1=window_end,
+                  line_width=0, fillcolor='black', opacity=0.2)
 
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    ax.xaxis.set_minor_locator(mdates.MonthLocator(interval=1))
-
-    locator = mdates.YearLocator()
-    locator.set_axis(ax.xaxis)
-    for yr in locator():
-        ax.axvline(x=yr, ls=':', color='lightgrey', linewidth=1)
-
-    ax.grid(which='major', axis='y', ls=':', color='lightgrey', linewidth=1)
-
-    delta = str2delta(window)
-    ax.axvspan(current_center - delta,
-               current_center + delta,
-               color='black', alpha=0.2, lw=0)
-    ax.axvline(x=current_center, ls='-', color='black', linewidth=1)
-    ax.legend()
-    fig.autofmt_xdate()
-    fig.tight_layout()
     return fig
 
 
@@ -273,26 +389,21 @@ histogram = pd.DataFrame({
     }
 })
 histogram.set_index('Bucket', inplace=True)
-current_center = st.slider('Investigation centre',
-                           min_value=datetime.datetime(date_start.year, date_start.month, date_start.day, 0, 0, 0),
-                           max_value=datetime.datetime(date_end.year, date_end.month, date_end.day, 23, 59, 59),
-                           value=datetime.datetime(date_start.year, date_start.month, date_start.day, 12, 0, 0),
-                           step=datetime.timedelta(days=1))
 
-technologies = list(queries.keys()) + ['Total']
-plot_technologies = st.multiselect('Technologies in plot', technologies, ['Total'])
-st.markdown(f'First day in aggregation: **{histogram.index[0]}**; Last day in aggregation: **{histogram.index[-1]}**; ')
+plot_technologies = st.multiselect('Technologies in plot', technologies, technologies)  # ['Total'])
+st.markdown(
+    f'First day in aggregation: **{histogram.index[0]}**; Last day in aggregation: **{histogram.index[-1]}**;   \n'
+    f'Selected window: **{window_start.date()}** to **{window_end.date()}** *(**{window}** around **{current_center.date()}**)*')
 
-figure = plot_temporal_count(histogram, plot_technologies)
-st.pyplot(figure, clear_figure=True)
+figure = plot_temporal_countly(histogram, plot_technologies)
+st.plotly_chart(figure, clear_figure=True, use_container_width=True)
 
 st.subheader('Hashtag counts')
-st.markdown(f'Showing hashtag counts **{window}** around **{current_center}** '
-            f'limited to the top **{hashtag_limit}** hashtags')
-hashtags = pd.DataFrame(fetch_hashtag_counts(window_size=window, center=current_center, limit=hashtag_limit))
+st.markdown(f'Showing hashtag counts from **{window_start.date()}** to **{window_end.date()}** '
+            f'limited to the top **{hashtag_limit}** hashtags  *(**{window}** around **{current_center}**)*')
+hashtags = pd.DataFrame(fetch_hashtag_counts())
 hashtags.set_index('tag', inplace=True)
-t = hashtags.pop('Total')
-hashtags.insert(0, 'Total', t)
+hashtags.insert(0, 'Total', hashtags.pop('Total'))
 st.dataframe(hashtags, use_container_width=True)
 
 technology2num = {tn: ti for ti, tn in enumerate(technologies)}
@@ -308,13 +419,13 @@ def turn(d: int):
     if st.session_state.ht_page < 0:
         st.session_state.ht_page = 0
 
+
 st.subheader('Tweets')
-cols_ht_set = st.columns([4,1])
+cols_ht_set = st.columns([4, 1])
 ht_hashtags = cols_ht_set[0].multiselect('Hashtags to search for', hashtags.index.values, hashtags.index.values[1])
 ht_technologies = cols_ht_set[0].multiselect('Technologies for hashtag search', technologies, technologies)
 ht_technologies_int = [technology2num[t] for t in ht_technologies]
 ht_fix_time = cols_ht_set[1].checkbox('Limit to time above', True)
-
 
 cols_paging = st.columns([1, 1, 5, 1, 1])
 cols_paging[0].button('Prev', on_click=lambda: turn(-1))
@@ -331,3 +442,28 @@ try:
 except:
     st.session_state.ht_page = 0
     st.text('No tweets found.')
+
+st.subheader('Most popular URLs')
+urls = fetch_domain_counts(full_url=True)
+urls_df = pd.DataFrame(urls)
+url_col = urls_df.pop('url')
+urls_df.set_index(url_col, inplace=True)
+urls_df.insert(0, 'Total', urls_df.pop('Total'))
+st.dataframe(urls_df, use_container_width=True)
+
+st.subheader('Most popular domains')
+domains = fetch_domain_counts(full_url=False)
+domains_df = pd.DataFrame(domains)
+domain_col = domains_df.pop('url')
+# st.markdown('<a href="{}" rel="noopener noreferrer" target="_blank">{}</a>'.format(url, name),unsafe_allow_html=True)
+domains_df.set_index(domain_col, inplace=True)
+domains_df.insert(0, 'Total', domains_df.pop('Total'))
+st.dataframe(domains_df, use_container_width=True)
+
+st.subheader('Most active users')
+users = fetch_user_counts()
+users_df = pd.DataFrame(users)
+user_col = users_df.pop('username')
+users_df.set_index(user_col, inplace=True)
+users_df.insert(0, 'Total', users_df.pop('Total'))
+st.dataframe(users_df, use_container_width=True)
