@@ -76,18 +76,18 @@ WITH buckets as (SELECT to_char(generate_series('2006-01-01 00:00'::timestamp,
                   AND ba.key = 'tech')
 SELECT b.bucket                                                                as day,
        count(labels.technology)                                                as num_tweets,
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 0)  as "Methane removal",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 0)  as "Methane Removal",
        count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 1)  as "CCS",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 2)  as "Ocean fertilization",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 3)  as "Ocean alkalinization",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 4)  as "Enhanced weathering",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 2)  as "Ocean Fertilization",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 3)  as "Ocean Alkalinization",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 4)  as "Enhanced Weathering",
        count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 5)  as "Biochar",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 6)  as "Afforestation/reforestation",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 7)  as "Ecosystem restoration",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 8)  as "Soil carbon sequestration",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 6)  as "Afforestation/Reforestation",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 7)  as "Ecosystem Restoration",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 8)  as "Soil Carbon Sequestration",
        count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 9)  as "BECCS",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 10) as "Blue carbon",
-       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 11) as "Direct air capture",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 10) as "Blue Carbon",
+       count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 11) as "Direct Air Capture",
        count(DISTINCT labels.twitter_id) FILTER (WHERE labels.technology = 12) as "GGR (general)"
 FROM buckets b
          LEFT JOIN labels ON labels.day = b.bucket
@@ -202,31 +202,35 @@ WITH user_tweets as (SELECT ti.item_id,
 SELECT ut.twitter_author_id,
        ut.username,
        -- Number of tweets matching any CDR query
-       count(DISTINCT ut.twitter_id)                                  as num_cdr_tweets,
+       count(DISTINCT ut.twitter_id)                                      as num_cdr_tweets,
        -- Tweets that are actually written and not just retweeted or quoted
-       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )      as num_orig_cdr_tweets,
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )          as num_orig_cdr_tweets,
        -- Total number of tweets by the user (as per Twitters profile information)
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)  as "Methane removal",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)  as "CCS",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)  as "Ocean fertilization",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)  as "Ocean alkalinization",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)  as "Enhanced weathering",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)  as "Biochar",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)  as "Afforestation/reforestation",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)  as "Ecosystem restoration",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)  as "Soil carbon sequestration",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)  as "BECCS",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10) as "Blue carbon",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11) as "Direct air capture",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12) as "GGR (general)",
+       ut.tweet_count                                                     as num_tweets,
+       (count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig ))::float /
+       count(DISTINCT ut.twitter_id)::float * 100                         as perc_orig,
+       count(DISTINCT ut.twitter_id)::float / ut.tweet_count::float * 100 as perc_cdr,
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)      as "Methane Removal",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)      as "CCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)      as "Ocean Fertilization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)      as "Ocean Alkalinization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)      as "Enhanced Weathering",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)      as "Biochar",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)      as "Afforestation/Reforestation",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)      as "Ecosystem Restoration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)      as "Soil Carbon Sequestration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)      as "BECCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)     as "Blue Carbon",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)     as "Direct Air Capture",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)     as "GGR (general)",
        ut.tweet_count,
        ut.listed_count,
        ut.followers_count,
        ut.following_count,
        ut.name,
        ut.location,
-       min(ut.created_at)                                             as earliest_cdr_tweet,
-       max(ut.created_at)                                             as latest_cdr_tweet,
+       min(ut.created_at)                                                 as earliest_cdr_tweet,
+       max(ut.created_at)                                                 as latest_cdr_tweet,
        ut.created_at,
        ut.verified,
        ut.description
@@ -407,6 +411,91 @@ ORDER BY num_tweets DESC
 LIMIT 200;
 
 
+-- Repeated URLs in tweets per technology
+WITH tweets as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                twitter_item.twitter_author_id,
+                                                                                twitter_item.twitter_id,
+                                                                                jsonb_array_elements(
+                                                                                        CASE
+                                                                                            WHEN twitter_item.urls = 'null'
+                                                                                                THEN '[
+                                                                                              null
+                                                                                            ]'::jsonb
+                                                                                            ELSE
+                                                                                                twitter_item.urls END) ->>
+                                                                                'url_expanded'    as url,
+                                                                                ba_tech.value_int as technology
+                FROM twitter_item
+                         LEFT JOIN bot_annotation ba_tech on (
+                            twitter_item.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech')
+                WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                  AND twitter_item.created_at > '2018-01-01'::timestamp - '5 week'::interval
+                  AND twitter_item.created_at < '2018-01-01'::timestamp + '5 week'::interval)
+SELECT url,
+       count(DISTINCT twitter_id)                                as num_tweets,
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane Removal",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 1)  as "CCS",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean Fertilization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean Alkalinization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced Weathering",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 5)  as "Biochar",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/Reforestation",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem Restoration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil Carbon Sequestration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 9)  as "BECCS",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue Carbon",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct Air Capture",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
+FROM tweets
+GROUP BY url
+ORDER BY num_tweets DESC
+LIMIT 50;
+
+-- Repeated URLs (stripped to hostname) in tweets per technology
+WITH tweets as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                twitter_item.twitter_author_id,
+                                                                                twitter_item.twitter_id,
+                                                                                jsonb_array_elements(
+                                                                                        CASE
+                                                                                            WHEN twitter_item.urls = 'null'
+                                                                                                THEN '[
+                                                                                              null
+                                                                                            ]'::jsonb
+                                                                                            ELSE
+                                                                                                twitter_item.urls END) ->>
+                                                                                'url_expanded'    as url,
+                                                                                ba_tech.value_int as technology
+                FROM twitter_item
+                         LEFT JOIN bot_annotation ba_tech on (
+                            twitter_item.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech')
+                WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                  AND twitter_item.created_at > '2018-01-01'::timestamp - '5 week'::interval
+                  AND twitter_item.created_at < '2018-01-01'::timestamp + '5 week'::interval)
+SELECT url,
+       count(DISTINCT twitter_id)                                as num_tweets,
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane Removal",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 1)  as "CCS",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean Fertilization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean Alkalinization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced Weathering",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 5)  as "Biochar",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/Reforestation",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem Restoration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil Carbon Sequestration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 9)  as "BECCS",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue Carbon",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct Air Capture",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
+FROM tweets
+GROUP BY url
+ORDER BY num_tweets DESC
+LIMIT 50;
+
+
 -- Cumulative user and tweet numbers
 WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
                                         '2022-12-31 23:59'::timestamp,
@@ -531,18 +620,18 @@ WITH labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) 
                   AND twitter_item.created_at < '2018-01-01'::timestamp + '5 week'::interval)
 SELECT tag,
        count(DISTINCT twitter_id)                                as num_tweets,
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane removal",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 0)  as "Methane Removal",
        count(DISTINCT twitter_id) FILTER (WHERE technology = 1)  as "CCS",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean fertilization",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean alkalinization",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced weathering",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 2)  as "Ocean Fertilization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 3)  as "Ocean Alkalinization",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 4)  as "Enhanced Weathering",
        count(DISTINCT twitter_id) FILTER (WHERE technology = 5)  as "Biochar",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/reforestation",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem restoration",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil carbon sequestration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 6)  as "Afforestation/Reforestation",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 7)  as "Ecosystem Restoration",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 8)  as "Soil Carbon Sequestration",
        count(DISTINCT twitter_id) FILTER (WHERE technology = 9)  as "BECCS",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue carbon",
-       count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct air capture",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 10) as "Blue Carbon",
+       count(DISTINCT twitter_id) FILTER (WHERE technology = 11) as "Direct Air Capture",
        count(DISTINCT twitter_id) FILTER (WHERE technology = 12) as "GGR (general)"
 FROM labels
 GROUP BY tag
