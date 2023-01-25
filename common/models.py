@@ -15,8 +15,9 @@ from sentence_transformers import SentenceTransformer
 def prepare_tweet(text: str):
     return ' '.join([
         '@user' if token.startswith('@') and len(token) > 1 else \
-            'http' if token.startswith('http') \
-                else token
+            'http' if token.startswith('http') else \
+                'http' if token.startswith('www') else \
+                    token
         for token in text.split(' ')
     ])
 
