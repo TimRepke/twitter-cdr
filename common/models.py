@@ -80,7 +80,7 @@ class Embedder:
             self._cache.mkdir(parents=True, exist_ok=True)
             target = str(self._cache)
 
-            model = SentenceTransformer(self.hf_name, cache_folder=target)
+            self._model = SentenceTransformer(self.hf_name, cache_folder=target)
 
     @staticmethod
     def preprocess(texts: list[str]):
