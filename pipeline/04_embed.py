@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
 
-import hnswlib
 import typer
 from sqlalchemy import text
 from sqlalchemy.orm import Session

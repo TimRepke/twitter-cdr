@@ -47,6 +47,7 @@ class Index:
             self.cur_ind, self.dict_labels = pickle.load(f)
 
     def save_index(self, path: Path):
+        Path(str(path) + '_index.bin').parent.mkdir(parents=True, exist_ok=True)
         self.index.save_index(str(path) + '_index.bin')
         with open(str(path) + '_keys.pkl', 'wb') as f:
             pickle.dump((self.cur_ind, self.dict_labels), f)
@@ -62,3 +63,8 @@ class Index:
                 [self.dict_labels[l] for l in li]
             )
         return labels, distances
+
+    def get_all_items(self):
+        labels = list(self.dict_labels.values())
+        vectors = np.array([self.index.get_items([i])[0] for i in self.dict_labels.keys()])
+        return labels, vectors
