@@ -9,6 +9,16 @@ from typing import Literal, Optional, Union
 from dataclasses import dataclass
 import numpy as np
 from abc import ABC, abstractmethod
+from sentence_transformers import SentenceTransformer
+
+
+def prepare_tweet(text: str):
+    return ' '.join([
+        '@user' if token.startswith('@') and len(token) > 1 else \
+            'http' if token.startswith('http') \
+                else token
+        for token in text.split(' ')
+    ])
 
 
 class Classifier:
@@ -49,18 +59,31 @@ class Classifier:
 
     @staticmethod
     def preprocess(texts: list[str]):
-        return [
-            ' '.join([
-                '@user' if token.startswith('@') and len(token) > 1 else \
-                    'http' if token.startswith('http') \
-                        else token
-                for token in text.split(' ')
-            ])
-            for text in texts
-        ]
+        return [prepare_tweet(text) for text in texts]
 
     def classify(self, texts: list[str], return_all_scores: bool = False):
         scores = self._classifier(texts, top_k=None if return_all_scores else 1)
         if return_all_scores:
             return [{score['label']: score['score'] for score in scores_i} for scores_i in scores]
         return [{score['label']: score['score']} for score in scores]
+
+
+class Embedder:
+    def __init__(self, hf_name: str, cache_dir: Path):
+        self.hf_name = hf_name
+        self._model: SentenceTransformer | None = None
+        self._cache = cache_dir
+
+    def load(self):
+        if self._model is None:
+            self._cache.mkdir(parents=True, exist_ok=True)
+            target = str(self._cache)
+
+            model = SentenceTransformer(self.hf_name, cache_folder=target)
+
+    @staticmethod
+    def preprocess(texts: list[str]):
+        return [prepare_tweet(text) for text in texts]
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        return self._model.encode(texts, convert_to_numpy=True)
