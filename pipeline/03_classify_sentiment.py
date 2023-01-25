@@ -19,7 +19,7 @@ MODEL_PATH = Path(f'{settings.DATA_MODELS}') / 'cardiff_latest'
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', level=logging.WARNING)
-    logger = logging.getLogger('import')
+    logger = logging.getLogger('classify')
     logger.setLevel('DEBUG')
 
     db_engine = DatabaseEngine(host=settings.HOST, port=settings.PORT,
