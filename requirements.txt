@@ -14,4 +14,5 @@ streamlit==1.17.0
 kaleido==0.2.1
 opentsne==0.6.2
 umap-learn==0.5.3
+annoy==1.17.1
 -e git+ssh://git@gitlab.pik-potsdam.de/mcc-apsis/nacsos/nacsos-data.git@7d30494430069b4fdd9f72292a6b72fcd7d6a663#egg=nacsos_data
