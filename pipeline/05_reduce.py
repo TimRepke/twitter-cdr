@@ -69,7 +69,8 @@ def main(embeddings_file: str | None = None,
             n_jobs=-2,  # -2 -> all but one core
             metric=sim_metric,
             random_state=seed,
-            verbose=tsne_verbose
+            verbose=tsne_verbose,
+            method='hnsw'
         )
 
         logger.debug('Computing initialisation with PCA...')
