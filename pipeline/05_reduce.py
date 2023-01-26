@@ -23,12 +23,13 @@ def main(embeddings_file: str | None = None,
          tsne_dof: float = 0.8,
          tsne_perplexity: int = 500,
          tsne_n_iter: int = 500,
+         tsne_k: int = 1500, # by default in openTSNE 3 * perplexity
 
          seed: int = 43,
 
          space: str = 'cosine',  # as used by hnsw index
          source_dims: int = 384,
-         tsne_verbose: bool=True,
+         tsne_verbose: bool = True,
          log_level: str = 'DEBUG',
          default_log_level: str = 'WARNING'
          ):
@@ -59,18 +60,28 @@ def main(embeddings_file: str | None = None,
     if algo == Algorithm.tsne:
         from openTSNE import TSNE
         from openTSNE.affinity import PerplexityBasedNN
+        from openTSNE.nearest_neighbors import PrecomputedNeighbors
         from openTSNE.initialization import pca
+
         logger.info(f'Going to reduce dimensions to {target_dims} using tSNE')
+
+        logger.info('Computing nearest neighbours...')
+        # Set ef parameter for (ideal) precision/recall
+        index.index.set_ef(min(2 * tsne_k, index.index.get_current_count()))
+        logger.debug('  > Querying...')
+        indices, distances = index.index.knn_query(embeddings, k=tsne_k, num_threads=-2)
+
+        ot_index = PrecomputedNeighbors(neighbors=indices[:, 1:], distances=distances[:, 1:])
 
         logger.debug('Computing affinities...')
         affinities = PerplexityBasedNN(
-            embeddings,
+            # data=None,
             perplexity=tsne_perplexity,
             n_jobs=-2,  # -2 -> all but one core
             metric=sim_metric,
             random_state=seed,
             verbose=tsne_verbose,
-            method='hnsw'
+            knn_index=ot_index
         )
 
         logger.debug('Computing initialisation with PCA...')
