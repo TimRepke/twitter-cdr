@@ -61,6 +61,7 @@ def main(target_dir: str | None = None,
          bot_annotation_tech: str = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275',
          bot_annotation_senti: str = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111',
          smoothing_windowsize: int | None = None,
+         exclude_missing: bool = False,
          skip_cache: bool = False,
          log_level: LogLevel = LogLevel.DEBUG):
     if target_dir is None:
@@ -181,8 +182,13 @@ def main(target_dir: str | None = None,
 
         return [row_to_obj(r) for r in result]
 
-    def fetch_tech_sentiments(technology: int) -> list[SentimentCounts]:
-        query = text("""
+    def fetch_tech_sentiments(technology: int | None) -> list[SentimentCounts]:
+        if technology is None:
+            tech_filter = ''
+        else:
+            tech_filter = 'AND labels.technology = :technology'
+
+        query = text(f"""
             WITH buckets as (SELECT generate_series(:start_time ::timestamp,
                                                     :end_time ::timestamp,
                                                     :resolution) as bucket),
@@ -210,7 +216,7 @@ def main(target_dir: str | None = None,
                  LEFT JOIN labels ON (
                     labels.created_at >= b.bucket
                 AND labels.created_at < b.bucket + :resolution ::interval
-                AND labels.technology = :technology)
+                {tech_filter})
             GROUP BY b.bucket
             ORDER BY bucket;
         """)
@@ -344,19 +350,29 @@ def main(target_dir: str | None = None,
             y_neg = shares[0]
 
             # fit trend for positive sentiments
-            fit_pos = np.polyfit(x, y_pos, 1)
+            mask = (y_pos != 0) & (y_neg != 0)
+            if exclude_missing:
+                fit_pos = np.polyfit(x[mask], y_pos[mask], 1)
+            else:
+                fit_pos = np.polyfit(x, y_pos, 1)
             fit_fn_pos = np.poly1d(fit_pos)
             trend_pos = fit_fn_pos[1]
             trendline_pos = fit_fn_pos(x)
 
             # fit trend for negative sentiments
-            fit_neg = np.polyfit(x, y_neg, 1)
+            if exclude_missing:
+                fit_neg = np.polyfit(x[mask], y_neg[mask], 1)
+            else:
+                fit_neg = np.polyfit(x, y_neg, 1)
             fit_fn_neg = np.poly1d(fit_neg)
             trend_neg = fit_fn_neg[1]
             trendline_neg = fit_fn_neg(x)
 
             # fit net trend
-            fit_net = np.polyfit(x, y_pos - y_neg, 1)
+            if exclude_missing:
+                fit_net = np.polyfit(x[mask], y_pos[mask] - y_neg[mask], 1)
+            else:
+                fit_net = np.polyfit(x, y_pos - y_neg, 1)
             fit_fn_net = np.poly1d(fit_net)
             trend_net = fit_fn_net[1]
 
@@ -434,6 +450,8 @@ def main(target_dir: str | None = None,
         show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_rel_tech_{tech_i}')
         figure = plot_sentiments_temp(data, technology=technology_name, relative=False)
         show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_abs_tech_{tech_i}')
+
+    data_acc['Total'] = fetch_tech_sentiments(None)
 
     figure = plot_sentiments_temp_all(data_acc, relative=True)
     show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_rel_tech_all')

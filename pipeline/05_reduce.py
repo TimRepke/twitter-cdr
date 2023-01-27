@@ -36,7 +36,7 @@ def main(embeddings_file: str | None = None,
          default_log_level: str = 'WARNING'
          ):
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', level=default_log_level)
-    logger = logging.getLogger('embed')
+    logger = logging.getLogger('reduce')
     logger.setLevel(log_level)
 
     if embeddings_file is None:

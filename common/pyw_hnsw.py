@@ -68,3 +68,53 @@ class Index:
         labels = list(self.dict_labels.values())
         vectors = np.array([self.index.get_items([i])[0] for i in self.dict_labels.keys()])
         return labels, vectors
+
+
+class DuplicateFreeIndex:
+    def __init__(self, space: str, dim: int):
+        self.index = hnswlib.Index(space, dim)
+        self.dict_labels = {}
+
+    def init_index(self, max_elements: int, ef_construction: int = 200, M: int = 16, random_seed: int = 100):
+        self.index.init_index(max_elements=max_elements, ef_construction=ef_construction, M=M, random_seed=random_seed)
+
+    def add_items(self, data, ids: list[str]):
+        for iid, datum in zip(ids, data):
+            # try for duplicates first
+            nearest, distances = self.index.knn_query([datum])
+
+            # looks like this vector is already in the index
+            if distances[0] == 0:
+                self.dict_labels[nearest].append(iid)
+            # not in index yet, add
+            else:
+                index_id = self.index.get_current_count()
+                self.index.add_items([data], [index_id])
+                self.dict_labels[index_id] = [iid]
+
+    def set_ef(self, ef: int):
+        self.index.set_ef(ef)
+
+    def load_index(self, path: Path):
+        self.index.load_index(str(path) + '_index.bin')
+        with open(str(path) + '_keys.pkl', 'rb') as f:
+            self.dict_labels = pickle.load(f)
+
+    def save_index(self, path: Path):
+        Path(str(path) + '_index.bin').parent.mkdir(parents=True, exist_ok=True)
+        self.index.save_index(str(path) + '_index.bin')
+        with open(str(path) + '_keys.pkl', 'wb') as f:
+            pickle.dump(self.dict_labels, f)
+
+    def knn_query(self, data, k: int = 1, include_duplicates: bool = False):
+        labels_int, distances = self.index.knn_query(data=data, k=k)
+        if include_duplicates:
+            raise NotImplementedError
+        else:
+            labels = [[self.dict_labels[l][0] for l in li] for li in labels_int]
+        return labels, distances
+
+    def get_all_items(self):
+        labels = list(self.dict_labels.values())
+        vectors = np.array([self.index.get_items([i])[0] for i in self.dict_labels.keys()])
+        return labels, vectors
