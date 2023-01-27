@@ -82,6 +82,10 @@ def main(embeddings_file: str | None = None,
         ds_embeddings = np.array([v for i, v in enumerate(embeddings) if i % 2 == 0])
         logger.debug(f' --> ended up with {len(ds_labels)} labels and {ds_embeddings.shape} embeddings')
 
+        del labels
+        del embeddings
+        del index
+
         logger.info('Making new index')
         hwind = hnswlib.Index(space='cosine', dim=source_dims)
         hwind.init_index(max_elements=index.index.get_current_count() // 2 + 1000,
