@@ -2,8 +2,9 @@ import logging
 from enum import Enum
 from pathlib import Path
 
-import numpy as np
 import typer
+import hnswlib
+import numpy as np
 
 from common.config import settings
 from common.pyw_hnsw import Index, DuplicateFreeIndex
@@ -31,7 +32,7 @@ def main(embeddings_file: str | None = None,
 
          space: str = 'cosine',  # as used by hnsw index
          source_dims: int = 384,
-         df_index: bool = True, # using duplicate free index if True
+         df_index: bool = True,  # using duplicate free index if True
          tsne_verbose: bool = True,
          log_level: str = 'DEBUG',
          default_log_level: str = 'WARNING'
@@ -76,25 +77,26 @@ def main(embeddings_file: str | None = None,
 
         logger.info(f'Going to reduce dimensions to {target_dims} using tSNE')
 
+        logger.debug('Downsampling!')
+        ds_labels = [l[0] for i, l in enumerate(labels) if i % 2 == 0]
+        ds_embeddings = np.array([v for i, v in enumerate(embeddings) if i % 2 == 0])
+        logger.debug(f' --> ended up with {len(ds_labels)} labels and {ds_embeddings.shape} embeddings')
+
+        logger.info('Making new index')
+        hwind = hnswlib.Index(space='cosine', dim=source_dims)
+        hwind.init_index(max_elements=index.index.get_current_count() // 2 + 1000,
+                         random_seed=seed, ef_construction=200, M=64)
+        hwind.add_items(ds_embeddings)
+
         logger.info('Computing nearest neighbours...')
         # Set ef parameter for (ideal) precision/recall
-        index.index.set_ef(min(2 * tsne_k, index.index.get_current_count()))
+        hwind.set_ef(min(2 * tsne_k, index.index.get_current_count()))
         indices_batched = []
         distances_batched = []
-        for batch_start in range(0, index.index.get_current_count(), tsne_nn_batch_size):
+        for batch_start in range(0, ds_embeddings.shape[0], tsne_nn_batch_size):
             logger.debug(f'  > Querying batch of items from {batch_start:,} to {batch_start + tsne_nn_batch_size:,}...')
-            try:
-                b_ids, b_dists = index.index.knn_query(embeddings[batch_start:batch_start + tsne_nn_batch_size],
-                                                       k=tsne_k + 1, num_threads=-2)
-            except RuntimeError:
-                # this happens when there are too many duplicates (complains about too small M or ef value)
-                # -> fall back to exact calculation within this batch
-                logger.debug(f'    -> Failed; falling back to exact calculation')
-                dists = cdist(embeddings[batch_start:batch_start + tsne_nn_batch_size], embeddings, metric=sim_metric)
-                logger.debug(f'    ->         fetching top-k')
-                b_ids, b_dists = topk(Tensor(dists), k=tsne_k + 1, dim=1, largest=False, sorted=True)
-                b_ids = b_ids.numpy()
-                b_dists = b_dists.numpy()
+            b_ids, b_dists = hwind.knn_query(ds_embeddings[batch_start:batch_start + tsne_nn_batch_size],
+                                                   k=tsne_k + 1, num_threads=-2)
             indices_batched.append(b_ids)
             distances_batched.append(b_dists)
 
@@ -139,8 +141,8 @@ def main(embeddings_file: str | None = None,
 
     logger.info('Adding data to vector index...')
     vi = VectorIndex()
-    vi.add_items(projection, labels)
-    vi.dict_labels = index.dict_labels
+    vi.add_items(projection, ds_labels)
+    # vi.dict_labels = index.dict_labels
 
     logger.debug('Writing vector index to disk...')
     vi.save(target_file)
