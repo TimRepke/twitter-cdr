@@ -83,16 +83,16 @@ class DuplicateFreeIndex:
         for iid, datum in tqdm.tqdm(zip(ids, data)):
             if self.index.get_current_count() > 0:
                 # try for duplicates first
-                nearest, distances = self.index.knn_query(np.array([datum]))
+                nearest, distances = self.index.knn_query(np.array([datum]), k=1)
 
                 # looks like this vector is already in the index
                 if distances[0] == 0:
-                    self.dict_labels[nearest].append(iid)
+                    self.dict_labels[nearest[0]].append(iid)
                     continue
 
             # not in index yet or empty index
             index_id = self.index.get_current_count()
-            self.index.add_items(np.array([data]), np.array([index_id]))
+            self.index.add_items(np.array([datum]), np.array([index_id]))
             self.dict_labels[index_id] = [iid]
 
     def set_ef(self, ef: int):
