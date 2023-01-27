@@ -166,6 +166,7 @@ def main(target_dir: str | None = None,
     max_y = np.max(y)
     logger.debug(f'Space spans: x = ({min_x}, {max_x}); y = ({min_y}, {max_y})')
 
+    x_norm = x-min_x
 
     logger.info('Fetching tweet info...')
     data = fetch_tweet_info()

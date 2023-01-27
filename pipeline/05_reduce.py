@@ -72,8 +72,6 @@ def main(embeddings_file: str | None = None,
         from openTSNE.affinity import PerplexityBasedNN
         from openTSNE.nearest_neighbors import PrecomputedNeighbors
         from openTSNE.initialization import pca
-        from scipy.spatial.distance import cdist
-        from torch import topk, Tensor
 
         logger.info(f'Going to reduce dimensions to {target_dims} using tSNE')
 
@@ -88,13 +86,13 @@ def main(embeddings_file: str | None = None,
 
         logger.info('Making new index')
         hwind = hnswlib.Index(space='cosine', dim=source_dims)
-        hwind.init_index(max_elements=index.index.get_current_count() // 2 + 1000,
+        hwind.init_index(max_elements=len(ds_labels),
                          random_seed=seed, ef_construction=200, M=64)
         hwind.add_items(ds_embeddings)
 
         logger.info('Computing nearest neighbours...')
         # Set ef parameter for (ideal) precision/recall
-        hwind.set_ef(min(2 * tsne_k, index.index.get_current_count()))
+        hwind.set_ef(min(2 * tsne_k, len(ds_labels)))
         indices_batched = []
         distances_batched = []
         for batch_start in range(0, ds_embeddings.shape[0], tsne_nn_batch_size):
@@ -123,7 +121,7 @@ def main(embeddings_file: str | None = None,
         )
 
         logger.info('Computing initialisation with PCA...')
-        init = pca(embeddings,
+        init = pca(ds_embeddings,
                    n_components=target_dims,
                    verbose=tsne_verbose,
                    random_state=seed)
