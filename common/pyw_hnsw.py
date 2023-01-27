@@ -87,7 +87,7 @@ class DuplicateFreeIndex:
 
                 # looks like this vector is already in the index
                 if distances[0] == 0:
-                    self.dict_labels[nearest[0]].append(iid)
+                    self.dict_labels[nearest[0][0]].append(iid)
                     continue
 
             # not in index yet or empty index
