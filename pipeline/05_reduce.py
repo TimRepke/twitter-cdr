@@ -57,9 +57,9 @@ def main(embeddings_file: str | None = None,
 
     logger.info(f'Loading hnswlib index')
     if df_index:
-        index = Index(space=space, dim=source_dims)
-    else:
         index = DuplicateFreeIndex(space=space, dim=source_dims)
+    else:
+        index = Index(space=space, dim=source_dims)
     index.load_index(embeddings_file)
     logger.debug(f' ... loaded {len(index.dict_labels)} vectors.')
 
