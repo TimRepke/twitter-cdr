@@ -157,19 +157,37 @@ def main(target_dir: str | None = None,
     index = VectorIndex()
     index.load(vector_file_basename)
     logger.debug('Building reverse lookup...')
-    id2idx = {item_id[0]: idx for idx, item_id in index.dict_labels.items()}
+    id2idx = {item_id: idx for idx, item_id in index.dict_labels.items()}
     x = index.vectors[:, 0]
     y = index.vectors[:, 1]
+    del index
+
     min_x = np.min(x)
     min_y = np.min(y)
     max_x = np.max(x)
     max_y = np.max(y)
-    logger.debug(f'Space spans: x = ({min_x}, {max_x}); y = ({min_y}, {max_y})')
+    range_x = abs((min_x - min_x) - (max_x - min_x))
+    range_y = abs((min_y - min_y) - (max_y - min_y))
 
-    x_norm = x-min_x
+    logger.debug(f'Space spans: x = ({min_x}, {max_x} | {range_x}); y = ({min_y}, {max_y} | {range_y})')
+
+    x_norm = (x - min_x) / range_x
+    y_norm = (y - min_y) / range_y
+    x_scaled = (x_norm * space_buckets).round()
+    y_scaled = (y_norm * space_buckets).round()
 
     logger.info('Fetching tweet info...')
     data = fetch_tweet_info()
+
+    logger.info('Joining vectors and tweet info...')
+    matched = [
+        (y[id2idx[d.item_id]], y_scaled[id2idx[d.item_id]], d)
+        for d in data
+        if d.item_id in id2idx
+    ]
+    del data
+
+
 
     figure = plot_sentiments_temp_all(data_acc, relative=True)
     show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_rel_tech_all')

@@ -7,10 +7,13 @@ import pickle
 class VectorIndex:
     def __init__(self):
         self.dict_labels = {}
-        self.vectors = []
+        self.vectors = np.array([])
 
     def add_items(self, data: np.ndarray, ids: list[str] | None = None):
-        self.vectors = np.vstack([self.vectors, data])
+        if len(self.vectors) == 0:
+            self.vectors = data
+        else:
+            self.vectors = np.vstack([self.vectors, data])
 
         num_added = len(data)
         start = len(self.dict_labels)
