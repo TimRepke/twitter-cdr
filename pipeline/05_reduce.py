@@ -6,7 +6,7 @@ import numpy as np
 import typer
 
 from common.config import settings
-from common.pyw_hnsw import Index
+from common.pyw_hnsw import Index, DuplicateFreeIndex
 from common.vector_index import VectorIndex
 
 
@@ -31,6 +31,7 @@ def main(embeddings_file: str | None = None,
 
          space: str = 'cosine',  # as used by hnsw index
          source_dims: int = 384,
+         df_index: bool = True, # using duplicate free index if True
          tsne_verbose: bool = True,
          log_level: str = 'DEBUG',
          default_log_level: str = 'WARNING'
@@ -40,7 +41,10 @@ def main(embeddings_file: str | None = None,
     logger.setLevel(log_level)
 
     if embeddings_file is None:
-        embeddings_file = Path(settings.DATA_VECTORS) / 'embeddings'
+        if df_index:
+            embeddings_file = Path(settings.DATA_VECTORS) / 'embeddings_df'
+        else:
+            embeddings_file = Path(settings.DATA_VECTORS) / 'embeddings'
     else:
         embeddings_file = Path(embeddings_file)
     logger.debug(f'Reading embeddings from: {embeddings_file}')
@@ -52,7 +56,10 @@ def main(embeddings_file: str | None = None,
     logger.debug(f'Writing to: {target_file}')
 
     logger.info(f'Loading hnswlib index')
-    index = Index(space=space, dim=source_dims)
+    if df_index:
+        index = Index(space=space, dim=source_dims)
+    else:
+        index = DuplicateFreeIndex(space=space, dim=source_dims)
     index.load_index(embeddings_file)
     logger.debug(f' ... loaded {len(index.dict_labels)} vectors.')
 
@@ -133,6 +140,7 @@ def main(embeddings_file: str | None = None,
     logger.info('Adding data to vector index...')
     vi = VectorIndex()
     vi.add_items(projection, labels)
+    vi.dict_labels = index.dict_labels
 
     logger.debug('Writing vector index to disk...')
     vi.save(target_file)
