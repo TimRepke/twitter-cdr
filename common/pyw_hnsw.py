@@ -5,6 +5,7 @@ import hnswlib
 import numpy as np
 import threading
 import pickle
+import tqdm
 
 
 class Index:
@@ -79,18 +80,20 @@ class DuplicateFreeIndex:
         self.index.init_index(max_elements=max_elements, ef_construction=ef_construction, M=M, random_seed=random_seed)
 
     def add_items(self, data, ids: list[str]):
-        for iid, datum in zip(ids, data):
-            # try for duplicates first
-            nearest, distances = self.index.knn_query([datum])
+        for iid, datum in tqdm.tqdm(zip(ids, data)):
+            if self.index.get_current_count() > 0:
+                # try for duplicates first
+                nearest, distances = self.index.knn_query([datum])
 
-            # looks like this vector is already in the index
-            if distances[0] == 0:
-                self.dict_labels[nearest].append(iid)
-            # not in index yet, add
-            else:
-                index_id = self.index.get_current_count()
-                self.index.add_items([data], [index_id])
-                self.dict_labels[index_id] = [iid]
+                # looks like this vector is already in the index
+                if distances[0] == 0:
+                    self.dict_labels[nearest].append(iid)
+                    continue
+
+            # not in index yet or empty index
+            index_id = self.index.get_current_count()
+            self.index.add_items([data], [index_id])
+            self.dict_labels[index_id] = [iid]
 
     def set_ef(self, ef: int):
         self.index.set_ef(ef)
