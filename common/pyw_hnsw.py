@@ -86,7 +86,7 @@ class DuplicateFreeIndex:
                 nearest, distances = self.index.knn_query(np.array([datum]), k=1)
 
                 # looks like this vector is already in the index
-                if distances[0] == 0:
+                if distances[0] == 0 or distances[0][0] == 0:
                     self.dict_labels[nearest[0][0]].append(iid)
                     continue
 
