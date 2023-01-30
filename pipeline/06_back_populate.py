@@ -90,7 +90,7 @@ def main(embeddings_file: str | None = None,
                     raise RuntimeError('Couldn\' find enough neighbours!')
             except RuntimeError:
                 dists = cdist(np.array([embeddings[i]]), embeddings, metric=space)
-                b_ids, b_dists = topk(Tensor(dists), k=n_nearest * 100, dim=1, largest=False, sorted=True)
+                b_dists, b_ids = topk(Tensor(dists), k=n_nearest * 100, dim=1, largest=False, sorted=True)
                 neighbour_ids = [
                     (labels[v], d)
                     for v, d in zip(b_ids.numpy()[0][1:], b_dists.numpy()[0][1:])
