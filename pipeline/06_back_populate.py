@@ -92,6 +92,7 @@ def main(embeddings_file: str | None = None,
             ])
 
             if averaging == Averaging.mean:
+                print(neighbour_vectors.shape, np.mean(neighbour_vectors, axis=0).shape)
                 vectors.append(np.mean(neighbour_vectors, axis=0))
             elif averaging == Averaging.median:
                 vectors.append(np.median(neighbour_vectors, axis=0))
