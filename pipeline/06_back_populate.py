@@ -5,6 +5,8 @@ from pathlib import Path
 import tqdm
 import typer
 import numpy as np
+from scipy.spatial.distance import cdist
+from torch import topk, Tensor
 
 from common.config import settings
 from common.pyw_hnsw import Index
@@ -74,17 +76,26 @@ def main(embeddings_file: str | None = None,
         if iid in id2idx:  # was already included in original projection
             vectors.append(p_vectors[id2idx[iid]])
         else:  # wasn't in the original projection, compute neighbourhood
-            for knn_factor in range(2, 43, 5):  # try with repeatedly growing search radius
-                neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * knn_factor)
+            try:
+                for knn_factor in range(2, 43, 5):  # try with repeatedly growing search radius
+                    neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * knn_factor)
+                    neighbour_ids = [
+                        (v, d)
+                        for v, d in zip(neighbours[0][1:], distances[0][1:])
+                        if v in id2idx
+                    ]
+                    if len(neighbour_ids) >= n_nearest:
+                        break
+                else:  # reached max search radius, exit with exception
+                    raise RuntimeError('Couldn\' find enough neighbours!')
+            except RuntimeError:
+                dists = cdist(np.array([embeddings[i]]), embeddings, metric=space)
+                b_ids, b_dists = topk(Tensor(dists), k=n_nearest * 100, dim=1, largest=False, sorted=True)
                 neighbour_ids = [
-                    (v, d)
-                    for v, d in zip(neighbours[0][1:], distances[0][1:])
-                    if v in id2idx
+                    (labels[v], d)
+                    for v, d in zip(b_ids.numpy()[0][1:], b_dists.numpy()[0][1:])
+                    if labels[v] in id2idx
                 ]
-                if len(neighbour_ids) >= n_nearest:
-                    break
-            else:  # reached max search radius, exit with exception
-                raise RuntimeError('Couldn\' find enough neighbours!')
 
             neighbour_vectors = np.array([
                 p_vectors[id2idx[ni[0]]]
