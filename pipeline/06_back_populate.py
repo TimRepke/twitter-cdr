@@ -56,7 +56,7 @@ def main(embeddings_file: str | None = None,
     logger.info(f'Loading hnswlib index')
     index = Index(space=space, dim=source_dims)
     index.load_index(embeddings_file)
-    index.set_ef(n_nearest * 10)
+    index.set_ef(n_nearest * 50)
     logger.debug(f' ... loaded {len(index.dict_labels)} vectors.')
     logger.debug('Fetching embeddings from index...')
     labels, embeddings = index.get_all_items()
@@ -74,7 +74,7 @@ def main(embeddings_file: str | None = None,
         if iid in id2idx:  # was already included in original projection
             vectors.append(p_vectors[id2idx[iid]])
         else:  # wasn't in the original projection, compute neighbourhood
-            for knn_factor in range(2, 20, 1):  # try with repeatedly growing search radius
+            for knn_factor in range(2, 43, 5):  # try with repeatedly growing search radius
                 neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * knn_factor)
                 neighbour_ids = [
                     (v, d)
