@@ -11,7 +11,7 @@ from common.pyw_hnsw import Index
 from common.vector_index import VectorIndex
 
 
-class Averaging(Enum, str):
+class Averaging(str, Enum):
     mean = 'mean'
     median = 'median'
     weighted = 'weighted'
