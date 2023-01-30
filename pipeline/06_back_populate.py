@@ -56,7 +56,7 @@ def main(embeddings_file: str | None = None,
     logger.info(f'Loading hnswlib index')
     index = Index(space=space, dim=source_dims)
     index.load_index(embeddings_file)
-    index.set_ef(n_nearest * 6)
+    index.set_ef(n_nearest * 10)
     logger.debug(f' ... loaded {len(index.dict_labels)} vectors.')
     logger.debug('Fetching embeddings from index...')
     labels, embeddings = index.get_all_items()
@@ -74,12 +74,18 @@ def main(embeddings_file: str | None = None,
         if iid in id2idx:  # was already included in original projection
             vectors.append(p_vectors[id2idx[iid]])
         else:  # wasn't in the original projection, compute neighbourhood
-            neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * 3)
-            neighbour_ids = [
-                (v, d)
-                for v, d in zip(neighbours[0][1:], distances[0][1:])
-                if v in id2idx
-            ]
+            for knn_factor in range(2, 20, 1):  # try with repeatedly growing search radius
+                neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * knn_factor)
+                neighbour_ids = [
+                    (v, d)
+                    for v, d in zip(neighbours[0][1:], distances[0][1:])
+                    if v in id2idx
+                ]
+                if len(neighbour_ids) >= n_nearest:
+                    break
+            else:  # reached max search radius, exit with exception
+                raise RuntimeError('Couldn\' find enough neighbours!')
+
             neighbour_vectors = np.array([
                 p_vectors[id2idx[ni[0]]]
                 for ni in neighbour_ids[:n_nearest]
@@ -91,8 +97,7 @@ def main(embeddings_file: str | None = None,
                 vectors.append(np.median(neighbour_vectors, axis=0))
             elif averaging == Averaging.weighted:
                 vectors.append(np.average(neighbour_vectors, axis=0,
-                                        weights=np.array([d for _, d in neighbour_ids[:n_nearest]])))
-
+                                          weights=np.array([d for _, d in neighbour_ids[:n_nearest]])))
 
     logger.info('Adding data to vector index...')
     vi = VectorIndex()
