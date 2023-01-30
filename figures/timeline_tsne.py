@@ -3,6 +3,7 @@ from enum import Enum
 from pathlib import Path
 from datetime import datetime
 
+import tqdm
 import typer
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -127,7 +128,8 @@ def main(target_dir: str | None = None,
             'bot_senti': bot_annotation_senti,
             'bot_tech': bot_annotation_tech,
         })
-        return [TweetInfo.parse_obj(r) for r in result]
+        return [TweetInfo(item_id=str(r['item_id']), created_at=r['created_at'], sentiment=r['sentiment'],
+                          technologies=r['technologies'], twitter_id=r['twitter_id']) for r in result]
 
     # def plot_sentiments_temp_all(counts: dict[str, list[SentimentCounts]],
     #                              relative: bool) -> plt.Figure:
@@ -173,26 +175,81 @@ def main(target_dir: str | None = None,
 
     x_norm = (x - min_x) / range_x
     y_norm = (y - min_y) / range_y
-    x_scaled = (x_norm * space_buckets).round()
-    y_scaled = (y_norm * space_buckets).round()
+    x_scaled = (x_norm * (space_buckets - 1)).round()
+    y_scaled = (y_norm * (space_buckets - 1)).round()
+
+    x_scaled = x_scaled.astype(int)
+    y_scaled = y_scaled.astype(int)
 
     logger.info('Fetching tweet info...')
     data = fetch_tweet_info()
 
     logger.info('Joining vectors and tweet info...')
-    matched = [
-        (y[id2idx[d.item_id]], y_scaled[id2idx[d.item_id]], d)
-        for d in data
+    matched: list[tuple[int, TweetInfo]] = [
+        (id2idx[d.item_id], d)
+        for d in tqdm.tqdm(data)
         if d.item_id in id2idx
     ]
     del data
 
+    logger.debug('Finding time buckets...')
+    buckets = sorted(list(set([d.created_at.strftime(bucket_fmt) for _, d in matched])))
+    logger.debug(f' -> Found {len(buckets)} time buckets')
+
+    logger.info('Building timeline matrix (Y)')
+    y_timeline = np.zeros((space_buckets, len(buckets)))
+    for di, d in tqdm.tqdm(matched):
+        y_timeline[y_scaled[di]][buckets.index(d.created_at.strftime(bucket_fmt))] += 1
+
+    logger.debug(f'sum: {y_timeline.sum():,.0f}, mean: {y_timeline.mean()}')
+    figure, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(y_timeline, cmap='YlOrRd', vmax=10)
+    show_save(figure, target_dir / 'temporal' / f'tempo_y')
+
+    logger.info('Building timeline matrix (X)')
+    x_timeline = np.zeros((space_buckets, len(buckets)))
+    for di, d in tqdm.tqdm(matched):
+        x_timeline[x_scaled[di]][buckets.index(d.created_at.strftime(bucket_fmt))] += 1
+
+    logger.debug(f'sum: {x_timeline.sum():,.0f}, mean: {x_timeline.mean()}')
+    figure, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(x_timeline, cmap='YlOrRd', vmax=10)
+    show_save(figure, target_dir / 'temporal' / f'tempo_x')
+
+    logger.info('Building rasterised scatterplot matrix...')
+    scatter_im = np.zeros((space_buckets, space_buckets))
+    for di, _ in tqdm.tqdm(matched):
+        scatter_im[y_scaled[di]][x_scaled[di]] += 1
+
+    print(scatter_im.shape)
+    print(x_timeline.T.shape)
+    print(y_timeline.shape)
+
+    figure, axes = plt.subplots(2, 2, sharex='col', sharey='row', figsize=(12, 12),
+                                gridspec_kw={'width_ratios': (1, 1.4), 'height_ratios': (1, 1.4)}, )
+    ax_scatter = axes[0][0]
+    ax_tlx = axes[1][0]
+    ax_tly = axes[0][1]
+    axes[1][1].remove()
+    ax_scatter.imshow(scatter_im, cmap='YlOrRd', vmax=20)
+    ax_tlx.imshow(x_timeline.T, cmap='YlOrRd', vmax=10)
+    ax_tly.imshow(y_timeline, cmap='YlOrRd', vmax=10)
+    ax_scatter.tick_params(axis='x', labelbottom=False, labeltop=True)
+    ax_scatter.tick_params(axis='y', labelright=False, labelleft=True)
+    ax_tlx.tick_params(axis='x', labelbottom=False, labeltop=False)
+    ax_tlx.tick_params(axis='y', labelright=True, labelleft=False)
+    ax_tly.tick_params(axis='x', labelbottom=True, labeltop=False)
+    ax_tly.tick_params(axis='y', labelright=False, labelleft=False)
+    figure.tight_layout()
+    plt.show()
+
+    show_save(figure, target_dir / 'temporal' / f'tempo_both')
 
 
-    figure = plot_sentiments_temp_all(data_acc, relative=True)
-    show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_rel_tech_all')
-    figure = plot_sentiments_temp_all(data_acc, relative=False)
-    show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_abs_tech_all')
+    # figure = plot_sentiments_temp_all(data_acc, relative=True)
+    # show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_rel_tech_all')
+    # figure = plot_sentiments_temp_all(data_acc, relative=False)
+    # show_save(figure, target_dir / 'sentiments_temporal' / f'tempo_{resolution.value}_abs_tech_all')
 
 
 if __name__ == "__main__":

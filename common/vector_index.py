@@ -25,13 +25,13 @@ class VectorIndex:
             self.dict_labels.update({i: i for i in int_labels})
 
     def load(self, path: Path):
-        self.vectors = np.load(str(path) + '_vecs.bin')
+        self.vectors = np.load(str(path) + '_vecs.npy')
         with open(str(path) + '_keys.pkl', 'rb') as f:
             self.dict_labels = pickle.load(f)
 
     def save(self, path: Path):
         Path(str(path) + '_vecs.bin').parent.mkdir(parents=True, exist_ok=True)
-        np.save(str(path) + '_vecs.bin', self.vectors)
+        np.save(str(path) + '_vecs.npy', self.vectors)
         with open(str(path) + '_keys.pkl', 'wb') as f:
             pickle.dump(self.dict_labels, f)
 
