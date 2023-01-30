@@ -9,6 +9,14 @@ class VectorIndex:
         self.dict_labels = {}
         self.vectors = np.array([])
 
+    @property
+    def id2idx(self) -> dict[str, int]:
+        return {v: k for k, v in self.dict_labels.items()}
+
+    @property
+    def idx2id(self) -> dict[int, str]:
+        return self.dict_labels
+
     def add_items(self, data: np.ndarray, ids: list[str] | None = None):
         if len(self.vectors) == 0:
             self.vectors = data

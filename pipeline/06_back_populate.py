@@ -65,7 +65,7 @@ def main(embeddings_file: str | None = None,
     p_index = VectorIndex()
     p_index.load(reduced_file)
     p_labels, p_vectors = p_index.get_all_items()
-    id2idx = {v: k for k, v in p_index.dict_labels.items()}
+    id2idx = p_index.id2idx
 
     logger.info('Collecting projected vectors for all entries...')
     item_ids = labels
@@ -76,9 +76,9 @@ def main(embeddings_file: str | None = None,
         else:  # wasn't in the original projection, compute neighbourhood
             neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * 3)
             neighbour_ids = [
-                (labels[v], d)
+                (v, d)
                 for v, d in zip(neighbours[0][1:], distances[0][1:])
-                if labels[v] in id2idx
+                if v in id2idx
             ]
             neighbour_vectors = np.array([
                 p_vectors[id2idx[ni[0]]]
