@@ -67,13 +67,14 @@ def main(embeddings_file: str | None = None,
     p_labels, p_vectors = p_index.get_all_items()
     id2idx = {v: k for k, v in p_index.dict_labels.items()}
 
+    logger.info('Collecting projected vectors for all entries...')
     item_ids = labels
     vectors = []
     for i, iid in tqdm.tqdm(enumerate(item_ids)):
         if iid in id2idx:  # was already included in original projection
             vectors.append(p_vectors[id2idx[iid]])
         else:  # wasn't in the original projection, compute neighbourhood
-            neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * 3)[0]
+            neighbours, distances = index.knn_query(np.array(embeddings[i]), k=n_nearest * 3)
             neighbour_ids = [
                 (labels[v], d)
                 for v, d in zip(neighbours[0][1:], distances[0][1:])
