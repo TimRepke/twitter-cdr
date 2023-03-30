@@ -3,7 +3,7 @@ import logging
 import hashlib
 import inspect
 from pathlib import Path
-from typing import Sequence, Any, TextIO
+from typing import Sequence, Any, TextIO, TypeVar, Callable
 import pickle
 
 from nacsos_data.db import DatabaseEngine
@@ -30,12 +30,16 @@ def make_hashable(o):
     return o
 
 
+RowType = TypeVar('RowType')
+
+
 def run_query(query: TextClause,
               params: dict[str, Any],
               db_engine: DatabaseEngine,
               cache_dir: Path,
               skip_cache: bool,
-              caller_offset: int = 1) -> Sequence[RowMapping] | list[dict]:
+              row2obj: Callable[[dict[str, Any]], RowType] | None = None,
+              caller_offset: int = 1) -> Sequence[RowMapping] | list[dict] | list[RowType]:
     caller = inspect.stack()[caller_offset].function
     param_hash = make_hash_sha256(params)
 
@@ -55,7 +59,11 @@ def run_query(query: TextClause,
 
     with db_engine.session() as session:  # type: Session
         logger.debug(f'Fetching data from db for caller {caller} (will store cache at: {cache_file})')
-        results = [dict(r) for r in session.execute(query, params).mappings().all()]
+
+        if row2obj:
+            results = [row2obj(dict(r)) for r in session.execute(query, params).mappings().all()]
+        else:
+            results = [dict(r) for r in session.execute(query, params).mappings().all()]
 
     with open(cache_file, 'wb') as f_out:
         pickle.dump(results, f_out)
@@ -79,4 +87,14 @@ class QueryCache:
                          db_engine=self.db_engine,
                          cache_dir=self.cache_dir,
                          skip_cache=self.skip_cache,
+                         caller_offset=2)
+
+    def query_parsed(self, query: TextClause,
+                     params: dict[str, Any],
+                     row2obj: Callable[[dict[str, Any]], RowType]) -> list[RowType]:
+        return run_query(query, params,
+                         db_engine=self.db_engine,
+                         cache_dir=self.cache_dir,
+                         skip_cache=self.skip_cache,
+                         row2obj=row2obj,
                          caller_offset=2)

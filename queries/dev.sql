@@ -21,11 +21,56 @@ WHERE key = 'senti'
   AND bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
 GROUP BY value_int;
 
+-- number of tweets w/o CCS/MR
+SELECT count(distinct item_id) FILTER ( WHERE value_int > 1 ) num_no_ccs,
+       count(distinct item_id) FILTER ( WHERE value_int = 1 ) num_ccs,
+       count(distinct item_id) FILTER ( WHERE value_int = 0 ) num_mr
+FROM bot_annotation
+WHERE bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+  AND key = 'tech';
+
 -- Number of tweets per language
 SELECT language, count(1) as num_tweets
 FROM twitter_item
 GROUP BY language
 ORDER BY num_tweets DESC;
+
+-- Number of tweets with more than n technology labels
+WITH counts as (SELECT
+                    -- overall num of techs per tweet
+                    count(ba_tech.value_int)                                        as num_techs_all,
+                    -- exclude Methane Removal (0) and CCS (1)
+                    count(ba_tech.value_int) FILTER ( WHERE ba_tech.value_int > 1 ) as num_tech_no_ccs
+                FROM twitter_item ti
+                         LEFT JOIN bot_annotation ba_tech on (
+                            ti.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech'
+                    )
+                WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                GROUP BY ti.twitter_id),
+     series as (SELECT generate_series(0, 12, 1) as bucket)
+SELECT bucket                                                    as n_techs,
+       count(1) FILTER ( WHERE counts.num_techs_all = bucket )   as tweets_all,
+       count(1) FILTER ( WHERE counts.num_tech_no_ccs = bucket ) as tweets_no_ccs
+FROM counts,
+     series
+GROUP BY bucket
+ORDER BY bucket;
+
+
+-- Temporal histogram (1-year resolution) of tweet counts
+WITH buckets as (SELECT generate_series('2006-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '1 year') as bucket),
+     ti as (SELECT created_at, twitter_id
+            FROM twitter_item
+            WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3')
+SELECT b.bucket as bucket, count(DISTINCT twitter_id) as num_tweets
+FROM buckets b
+         LEFT JOIN ti ON (ti.created_at >= b.bucket AND ti.created_at < (b.bucket + '1 year'::interval))
+GROUP BY b.bucket
+ORDER BY b.bucket;
 
 -- Temporal histogram (1-day resolution) of tweet counts
 WITH buckets as (SELECT to_char(generate_series('2006-01-01 00:00'::timestamp,
@@ -174,6 +219,7 @@ LIMIT 200;
 WITH user_tweets as (SELECT ti.item_id,
                             ti.twitter_id,
                             ti.twitter_author_id,
+                            ti.created_at                 as tweet_timestamp,
                             u.tweet_count,
                             u.listed_count,
                             u.followers_count,
@@ -229,8 +275,8 @@ SELECT ut.twitter_author_id,
        ut.following_count,
        ut.name,
        ut.location,
-       min(ut.created_at)                                                 as earliest_cdr_tweet,
-       max(ut.created_at)                                                 as latest_cdr_tweet,
+       min(ut.tweet_timestamp)                                            as earliest_cdr_tweet,
+       max(ut.tweet_timestamp)                                            as latest_cdr_tweet,
        ut.created_at,
        ut.verified,
        ut.description
@@ -242,6 +288,97 @@ GROUP BY ut.name, ut.username, ut.location, ut.tweet_count, ut.listed_count, ut.
          ut.created_at, ut.verified, ut.description, ut.twitter_author_id
 ORDER BY num_cdr_tweets DESC
 LIMIT 200;
+
+
+SELECT COUNT(DISTINCT twitter_author_id) as num_users
+FROM twitter_item;
+
+-- Users with most CDR tweets (incl per technology and per sentiment count)
+WITH user_tweets as (SELECT ti.item_id,
+                            ti.twitter_id,
+                            ti.twitter_author_id,
+                            ti.created_at                 as tweet_timestamp,
+                            u.tweet_count,
+                            u.listed_count,
+                            u.followers_count,
+                            u.following_count,
+                            u.name,
+                            u.username,
+                            u.location,
+                            u.created_at,
+                            u.verified,
+                            u.description,
+                            ti.referenced_tweets = 'null' as is_orig
+                     FROM twitter_item ti,
+                          jsonb_to_record(ti."user") as u (
+                                                           "name" text,
+                                                           "username" text,
+                                                           "location" text,
+                                                           "tweet_count" int,
+                                                           "listed_count" int,
+                                                           "followers_count" int,
+                                                           "following_count" int,
+                                                           "created_at" timestamp,
+                                                           "verified" bool,
+                                                           "description" text
+                              )
+                     WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                       AND ti.created_at >= '2010-01-01 00:00'::timestamp
+                       AND ti.created_at <= '2022-12-31 23:59'::timestamp)
+SELECT ut.twitter_author_id,
+       ut.username,
+       -- Number of tweets matching any CDR query
+       count(DISTINCT ut.twitter_id)                                       as num_cdr_tweets,
+       -- Tweets that are actually written and not just retweeted or quoted
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )           as num_orig_cdr_tweets,
+       -- Total number of tweets by the user (as per Twitters profile information)
+       ut.tweet_count                                                      as num_tweets,
+       (count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig ))::float /
+       count(DISTINCT ut.twitter_id)::float * 100                          as perc_orig,
+       count(DISTINCT ut.twitter_id)::float / ut.tweet_count::float * 100  as perc_cdr,
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 2) as "Positive",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 1) as "Neutral",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 0) as "Negative",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)       as "Methane Removal",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)       as "CCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)       as "Ocean Fertilization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)       as "Ocean Alkalinization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)       as "Enhanced Weathering",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)       as "Biochar",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)       as "Afforestation/Reforestation",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)       as "Ecosystem Restoration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)       as "Soil Carbon Sequestration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)       as "BECCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)      as "Blue Carbon",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)      as "Direct Air Capture",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)      as "GGR (general)",
+       ut.tweet_count,
+       ut.listed_count,
+       ut.followers_count,
+       ut.following_count,
+       ut.name,
+       ut.location,
+       min(ut.tweet_timestamp)                                             as earliest_cdr_tweet,
+       max(ut.tweet_timestamp)                                             as latest_cdr_tweet,
+       max(ut.tweet_timestamp) - min(ut.tweet_timestamp)                   as time_cdr_active,
+       min(ut.tweet_timestamp) - ut.created_at                             as time_to_first_cdr,
+       ut.created_at,
+       ut.verified,
+       ut.description
+FROM user_tweets ut
+         LEFT JOIN bot_annotation ba_senti ON (
+            ut.item_id = ba_senti.item_id
+        AND ba_senti.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
+        AND ba_senti.key = 'senti'
+        AND ba_senti.repeat = 1)
+         LEFT JOIN bot_annotation ba ON (
+            ut.item_id = ba.item_id
+        AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+        AND ba.key = 'tech')
+GROUP BY ut.name, ut.username, ut.location, ut.tweet_count, ut.listed_count, ut.followers_count, ut.following_count,
+         ut.created_at, ut.verified, ut.description, ut.twitter_author_id
+ORDER BY num_cdr_tweets DESC
+LIMIT 50;
 
 -- Number of tweets per query for a specific user
 SELECT ti.twitter_author_id          as user_id,
@@ -320,6 +457,30 @@ FROM twitter_item ti
 WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
 LIMIT 10;
 
+-- export for sharing
+WITH sentiments AS (SELECT item_id,
+                           json_agg(ba.value_int)  as sentiment,
+                           json_agg(ba.confidence) as sentiment_score
+                    FROM bot_annotation ba
+                    WHERE ba.bot_annotation_metadata_id = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111'
+                      AND ba.key = 'senti'
+                    GROUP BY item_id),
+     technologies AS (SELECT ba.item_id,
+                             json_agg(json_build_object(
+                                     'tech', ba.value_int,
+                                     'query', sub.value_int)) as technologies
+                      FROM bot_annotation ba
+                               LEFT JOIN bot_annotation sub ON sub.parent = ba.bot_annotation_id
+                      WHERE ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba.key = 'tech'
+                      GROUP BY ba.item_id)
+SELECT ti.twitter_id, ti.twitter_author_id, s.sentiment, s.sentiment_score, t.technologies
+FROM twitter_item ti
+         LEFT JOIN sentiments s ON s.item_id = ti.item_id
+         LEFT JOIN technologies t ON t.item_id = ti.item_id
+WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+ORDER BY ti.created_at
+LIMIT 10;
 
 -- URLs in tweets
 SELECT ti.twitter_id, jsonb_path_query(ti.urls, '$[*].url_expanded')
@@ -667,3 +828,38 @@ WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
   AND ba.key = 'tech'
   AND ti.hashtags @> '[{"tag": "CCS"}]'
 LIMIT 50;
+
+
+
+WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
+                                        '2022-12-31 23:59'::timestamp,
+                                        '1 month') as bucket),
+     labels as (SELECT DISTINCT ON (twitter_item.twitter_id, ba_tech.value_int) twitter_item.created_at,
+                                                                                twitter_item.twitter_author_id,
+                                                                                twitter_item.twitter_id
+                FROM twitter_item
+                         LEFT JOIN bot_annotation ba_tech on (
+                            twitter_item.item_id = ba_tech.item_id
+                        AND ba_tech.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+                        AND ba_tech.key = 'tech')
+                WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+                  AND ba_tech.value_int = 0),
+     grouped as (SELECT b.bucket,
+                        l.twitter_author_id,
+                        array_agg(l.twitter_id)      as tweet_ids,
+                        count(DISTINCT l.twitter_id) as num_tweets
+                 FROM buckets b
+                          LEFT JOIN labels l ON (
+                             l.created_at >= b.bucket
+                         AND l.created_at < (b.bucket + '1 month'::interval))
+                 GROUP BY b.bucket, l.twitter_author_id
+                 ORDER BY num_tweets)
+SELECT g.bucket,
+       SUM(g.num_tweets)                                                      as tweet_count,
+       COUNT(DISTINCT g.twitter_author_id)                                    as user_count,
+       COALESCE(json_object_agg(g.twitter_author_id, g.tweet_ids)
+                FILTER (WHERE g.twitter_author_id IS NOT NULL), 'null'::JSON) as user_tweets
+FROM grouped g
+group by g.bucket
+ORDER BY g.bucket
+LIMIT 10;

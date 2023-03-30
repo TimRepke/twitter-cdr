@@ -10,6 +10,7 @@ class EventType(Enum):
     NAT = 'NAT'  # natural disaster
     PAN = 'PAN'  # covid pandemic
     IPC = 'IPC'  # IPCC reports
+    MISC = 'MISC'  # other things
 
 
 @dataclass
@@ -21,6 +22,8 @@ class Event:
 
 
 events: dict[str, Event] = OrderedDict([
+    ('twitter', Event(name='Twitter was founded', type=EventType.MISC,  # https://en.wikipedia.org/wiki/Twitter
+                      date_start=datetime.date(2007, 3, 21))),
     ('cop13', Event(name='COP13 Bali', type=EventType.COP,  # https://unfccc.int/event/cop-13
                     date_start=datetime.date(2007, 12, 3), date_end=datetime.date(2007, 12, 14))),
     ('cop14', Event(name='COP14 Poznan', type=EventType.COP,  # https://unfccc.int/event/cop-14

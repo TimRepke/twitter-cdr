@@ -1,20 +1,25 @@
+import json
 import logging
 from enum import Enum
 from pathlib import Path
 from datetime import datetime
 
+import pyarrow as pa
+import pyarrow.feather as feather
+import pyarrow.parquet as pq
 import tqdm
 import typer
 from pydantic import BaseModel
 from sqlalchemy import text
 import numpy as np
-from matplotlib import pyplot as plt
 
 from nacsos_data.db import DatabaseEngine
 
 from common.vector_index import VectorIndex
 from common.config import settings
 from common.db_cache import QueryCache
+from common.queries import queries
+
 
 class LogLevel(str, Enum):
     DEBUG = 'DEBUG'
@@ -29,25 +34,25 @@ class TweetInfo(BaseModel):
     item_id: str
     sentiment: int
     technologies: list[int]
+    twitter_author_id: str
+    like_count: int
+    quote_count: int
+    reply_count: int
+    retweet_count: int
 
 
 def main(target_dir: str | None = None,
          vector_file_basename: str | None = None,
          start_time: str = '2010-01-01 00:00',
          end_time: str = '2022-12-31 23:59',
-         bucket_fmt: str = '%Y-%W',  # https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior
          space_buckets: int = 500,
-         show: bool = False,
-         export_png: bool = True,
-         export_pdf: bool = False,
-         export_svg: bool = False,
          project_id: str | None = None,
          bot_annotation_tech: str = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275',
          bot_annotation_senti: str = 'e63da0c9-9bb5-4026-ab5e-7d5845cdc111',
          skip_cache: bool = False,
          log_level: LogLevel = LogLevel.DEBUG):
     if target_dir is None:
-        target_dir = Path(settings.DATA_FIGURES) / 'landscape'
+        target_dir = Path(settings.DATA_INTERACTIVE) / 'landscape'
     else:
         target_dir = Path(target_dir)
 
@@ -80,25 +85,16 @@ def main(target_dir: str | None = None,
         skip_cache=skip_cache
     )
 
-    def show_save(fig: plt.Figure, target: Path):
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        if export_png:
-            fig.savefig(str(target) + '.png')
-        if export_svg:
-            fig.savefig(str(target) + '.svg')
-        if export_pdf:
-            fig.savefig(str(target) + '.pdf')
-        if show:
-            fig.show()
-        else:
-            plt.close(fig)
-
     def fetch_tweet_info() -> list[TweetInfo]:
         query = text("""
             SELECT info.*
             FROM (SELECT DISTINCT ON (ti.twitter_id) ti.item_id,
                                                      ti.twitter_id,
+                                                     ti.twitter_author_id,
+                                                     ti.like_count,
+                                                     ti.quote_count,
+                                                     ti.reply_count,
+                                                     ti.retweet_count,
                                                      ti.created_at,
                                                      ba_sent.value_int                                               as sentiment,
                                                      array_agg(ba_tech.value_int) OVER ( PARTITION BY ti.twitter_id) as technologies
@@ -125,7 +121,10 @@ def main(target_dir: str | None = None,
             'bot_tech': bot_annotation_tech,
         })
         return [TweetInfo(item_id=str(r['item_id']), created_at=r['created_at'], sentiment=r['sentiment'],
-                          technologies=r['technologies'], twitter_id=r['twitter_id']) for r in result]
+                          technologies=r['technologies'], twitter_id=r['twitter_id'],
+                          twitter_author_id=r['twitter_author_id'], like_count=r['like_count'],
+                          quote_count=r['quote_count'], reply_count=r['reply_count'], retweet_count=r['retweet_count'])
+                for r in result]
 
     logger.info(f'Loading index from {vector_file_basename}')
     index = VectorIndex()
@@ -154,67 +153,71 @@ def main(target_dir: str | None = None,
     y_scaled = y_scaled.astype(int)
 
     logger.info('Fetching tweet info...')
-    data = fetch_tweet_info()
-
+    data: list[TweetInfo] = fetch_tweet_info()
     logger.info('Joining vectors and tweet info...')
-    matched: list[tuple[int, TweetInfo]] = [
-        (id2idx[d.item_id], d)
+    matched: list[dict] = [
+        {
+            **d.dict(),
+            'twitter_id': int(d.twitter_id),
+            'twitter_author_id': int(d.twitter_author_id),
+            # 'x': x[id2idx[d.item_id]],
+            # 'y': y[id2idx[d.item_id]],
+            'xb': x_scaled[id2idx[d.item_id]],
+            'yb': y_scaled[id2idx[d.item_id]]
+        }
         for d in tqdm.tqdm(data)
         if d.item_id in id2idx
     ]
     del data
 
-    logger.debug('Finding time buckets...')
-    buckets = sorted(list(set([d.created_at.strftime(bucket_fmt) for _, d in matched])))
-    logger.debug(f' -> Found {len(buckets)} time buckets')
+    logger.debug('from_pylist()')
+    tab = pa.Table.from_pylist(
+        mapping=matched,
+        schema=pa.schema(
+            fields=[
+                pa.field('created_at', pa.date64()),
+                pa.field('item_id', pa.string()),
+                pa.field('twitter_id', pa.uint64()),
+                pa.field('twitter_author_id', pa.uint64()),
+                pa.field('sentiment', pa.uint8()),
+                pa.field('technologies', pa.list_(pa.uint8())),
+                pa.field('like_count', pa.uint64()),
+                pa.field('quote_count', pa.uint64()),
+                pa.field('reply_count', pa.uint64()),
+                pa.field('retweet_count', pa.uint64()),
+                # pa.field('x', pa.float32()),
+                # pa.field('y', pa.float32()),
+                pa.field('xb', pa.uint16()),
+                pa.field('yb', pa.uint16())
+            ],
+            metadata={
+                'range_xb': json.dumps([0, 500]),
+                'range_yb': json.dumps([0, 500]),
+                'range_x': json.dumps([min_x, max_x]),
+                'range_y': json.dumps([min_y, max_y]),
+                'sentiments': json.dumps(['negative', 'neutral', 'positive']),
+                'technologies': json.dumps(list(queries.keys())),
+                'dt_start': start_time,
+                'dt_end': end_time
+            }
+        )
+    )
 
-    logger.info('Building timeline matrix (Y)')
-    y_timeline = np.zeros((space_buckets, len(buckets)))
-    for di, d in tqdm.tqdm(matched):
-        y_timeline[y_scaled[di]][buckets.index(d.created_at.strftime(bucket_fmt))] += 1
+    logger.debug(tab.schema)
 
-    logger.debug(f'sum: {y_timeline.sum():,.0f}, mean: {y_timeline.mean()}')
-    figure, ax = plt.subplots(figsize=(10, 10))
-    ax.imshow(y_timeline, cmap='YlOrRd', vmax=10)
-    show_save(figure, target_dir / 'temporal' / f'tempo_y')
+    logger.info('Writing feather...')
+    target_dir.mkdir(parents=True, exist_ok=True)
+    feather.write_feather(tab, str(target_dir / 'data.feather'), compression='lz4')
+    logger.debug('Done!')
 
-    logger.info('Building timeline matrix (X)')
-    x_timeline = np.zeros((space_buckets, len(buckets)))
-    for di, d in tqdm.tqdm(matched):
-        x_timeline[x_scaled[di]][buckets.index(d.created_at.strftime(bucket_fmt))] += 1
+    logger.debug('Writing arrow...')
+    writer = pa.RecordBatchFileWriter(str(target_dir / 'data.arrow'), tab.schema)
+    writer.write(tab)
+    writer.close()
 
-    logger.debug(f'sum: {x_timeline.sum():,.0f}, mean: {x_timeline.mean()}')
-    figure, ax = plt.subplots(figsize=(10, 10))
-    ax.imshow(x_timeline, cmap='YlOrRd', vmax=10)
-    show_save(figure, target_dir / 'temporal' / f'tempo_x')
-
-    logger.info('Building rasterised scatterplot matrix...')
-    scatter_im = np.zeros((space_buckets, space_buckets))
-    for di, _ in tqdm.tqdm(matched):
-        scatter_im[y_scaled[di]][x_scaled[di]] += 1
-
-    print(scatter_im.shape)
-    print(x_timeline.T.shape)
-    print(y_timeline.shape)
-
-    figure, axes = plt.subplots(2, 2, sharex='col', sharey='row', figsize=(12, 12),
-                                gridspec_kw={'width_ratios': (1, 1.4), 'height_ratios': (1, 1.4)}, )
-    ax_scatter = axes[0][0]
-    ax_tlx = axes[1][0]
-    ax_tly = axes[0][1]
-    axes[1][1].remove()
-    ax_scatter.imshow(scatter_im, cmap='YlOrRd', vmax=20)
-    ax_tlx.imshow(x_timeline.T, cmap='YlOrRd', vmax=10)
-    ax_tly.imshow(y_timeline, cmap='YlOrRd', vmax=10)
-    ax_scatter.tick_params(axis='x', labelbottom=False, labeltop=True)
-    ax_scatter.tick_params(axis='y', labelright=False, labelleft=True)
-    ax_tlx.tick_params(axis='x', labelbottom=False, labeltop=False)
-    ax_tlx.tick_params(axis='y', labelright=True, labelleft=False)
-    ax_tly.tick_params(axis='x', labelbottom=True, labeltop=False)
-    ax_tly.tick_params(axis='y', labelright=False, labelleft=False)
-    figure.tight_layout()
-
-    show_save(figure, target_dir / 'temporal' / f'tempo_both')
+    logger.debug('Writing parquet...')
+    pq.write_table(tab, str(target_dir / 'data.parquet'))
+    logger.debug('Done!')
 
 if __name__ == "__main__":
     typer.run(main)
