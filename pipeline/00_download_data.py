@@ -7,6 +7,7 @@ from common.config import settings
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', level=logging.DEBUG)
     TARGET_DIR = Path(settings.DATA_RAW_TWEETS)
+
     for cat, sub_queries in queries.items():
         logging.info(f'Looking at {cat} with {len(sub_queries)} sub-queries.')
         for entry in sub_queries:

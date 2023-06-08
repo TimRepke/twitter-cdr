@@ -39,6 +39,7 @@ interactive/projection/falcon/images/
 interactive/projection/falcon/node_modules/
 interactive/projection/falcon/weather/
 interactive/projection/falcon/yarn.lock
+interactive/projection/falcon/
 **/.ipynb_checkpoints/
 paper/data/
 paper/tmp.ipynb

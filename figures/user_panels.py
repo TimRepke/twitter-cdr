@@ -130,11 +130,15 @@ class Container:
               AND ti.created_at <= :time_to ::timestamp
               AND ba_tech.value_int {tech_filter}),
             users AS (
-            SELECT twitter_author_id, username, created, days, n_tweets,
+            SELECT twitter_author_id, 
+                   MAX(username) as username,
+                   MAX(created) as created, 
+                   MAX(days) as days, 
+                   MAX(n_tweets) as n_tweets,
                    COUNT(DISTINCT twitter_id)      as n_cdr_tweets,
                    array_agg(DISTINCT twitter_id)  AS tids
             FROM tmp
-            GROUP BY twitter_author_id, username, created, days, n_tweets
+            GROUP BY twitter_author_id
             )
         SELECT * FROM users
         WHERE n_tweets/days  <= :max_tpd

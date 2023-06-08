@@ -177,23 +177,23 @@ ORDER BY day;
 
 -- Users with most CDR tweets
 SELECT ti.twitter_author_id,
-       u.username,
+       MAX(u.username)                                         as username,
        -- Number of tweets matching any CDR query
        count(1)                                                as num_cdr_tweets,
        -- Tweets that are actually written and not just retweeted or quoted
        count(1) FILTER ( WHERE ti.referenced_tweets = 'null' ) as num_orig_cdr_tweets,
        -- Total number of tweets by the user (as per Twitters profile information)
-       u.tweet_count,
-       u.listed_count,
-       u.followers_count,
-       u.following_count,
-       u.name,
-       u.location,
+       MAX(u.tweet_count)                                      as tweet_count,
+       MAX(u.listed_count)                                     as listed_count,
+       MAX(u.followers_count)                                  as followers_count,
+       MAX(u.following_count)                                  as following_count,
+       MAX(u.name)                                             as name,
+       MAX(u.location)                                         as location,
        min(ti.created_at)                                      as earliest_cdr_tweet,
        max(ti.created_at)                                      as latest_cdr_tweet,
-       u.created_at,
-       u.verified,
-       u.description
+       MAX(u.created_at)                                       as created_at,
+       bool_or(u.verified)                                     as verified,
+       MAX(u.description)                                      as description
 FROM twitter_item ti,
      jsonb_to_record(ti."user") as u (
                                       "name" text,
@@ -209,8 +209,7 @@ FROM twitter_item ti,
          )
 
 WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
-GROUP BY u.name, u.username, u.location, u.tweet_count, u.listed_count, u.followers_count, u.following_count,
-         u.created_at, u.verified, u.description, ti.twitter_author_id
+GROUP BY ti.twitter_author_id
 ORDER BY num_cdr_tweets DESC
 LIMIT 200;
 
@@ -246,46 +245,57 @@ WITH user_tweets as (SELECT ti.item_id,
                               )
                      WHERE ti.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3')
 SELECT ut.twitter_author_id,
-       ut.username,
+       MAX(ut.username)                                                               as username,
        -- Number of tweets matching any CDR query
-       count(DISTINCT ut.twitter_id)                                      as num_cdr_tweets,
+       count(DISTINCT ut.twitter_id)                                                  as num_cdr_tweets,
+       -- Number of tweets matching any CDR query (excluding Methane Removal (0) and CCS (1) )
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int > 1)                  as num_cdr_tweets_noccs,
+
        -- Tweets that are actually written and not just retweeted or quoted
-       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )          as num_orig_cdr_tweets,
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )                      as num_orig_cdr_tweets,
+       -- Tweets that are actually written and not just retweeted or quoted (excluding Methane Removal (0) and CCS (1) )
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig AND ba.value_int > 1 ) as num_orig_cdr_tweets_noccs,
        -- Total number of tweets by the user (as per Twitters profile information)
-       ut.tweet_count                                                     as num_tweets,
+       MAX(ut.tweet_count)                                                            as num_tweets,
        (count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig ))::float /
-       count(DISTINCT ut.twitter_id)::float * 100                         as perc_orig,
-       count(DISTINCT ut.twitter_id)::float / ut.tweet_count::float * 100 as perc_cdr,
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)      as "Methane Removal",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)      as "CCS",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)      as "Ocean Fertilization",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)      as "Ocean Alkalinization",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)      as "Enhanced Weathering",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)      as "Biochar",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)      as "Afforestation/Reforestation",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)      as "Ecosystem Restoration",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)      as "Soil Carbon Sequestration",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)      as "BECCS",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)     as "Blue Carbon",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)     as "Direct Air Capture",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)     as "GGR (general)",
-       ut.tweet_count,
-       ut.listed_count,
-       ut.followers_count,
-       ut.following_count,
-       ut.name,
-       ut.location,
-       min(ut.tweet_timestamp)                                            as earliest_cdr_tweet,
-       max(ut.tweet_timestamp)                                            as latest_cdr_tweet,
-       ut.created_at,
-       ut.verified,
-       ut.description
+       count(DISTINCT ut.twitter_id)::float * 100                                     as perc_orig,
+       count(DISTINCT ut.twitter_id)::float / MAX(ut.tweet_count)::float * 100        as perc_cdr,
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 2)            as "Positive",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 1)            as "Neutral",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 0)            as "Negative",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)                  as "Methane Removal",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)                  as "CCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)                  as "Ocean Fertilization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)                  as "Ocean Alkalinization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)                  as "Enhanced Weathering",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)                  as "Biochar",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)                  as "Afforestation/Reforestation",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)                  as "Ecosystem Restoration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)                  as "Soil Carbon Sequestration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)                  as "BECCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)                 as "Blue Carbon",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)                 as "Direct Air Capture",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)                 as "GGR (general)",
+       MAX(ut.tweet_count)                                                            as tweet_count,
+       MAX(ut.listed_count)                                                           as listed_count,
+       MAX(ut.followers_count)                                                        as followers_count,
+       MAX(ut.following_count)                                                        as following_count,
+       MAX(ut.name)                                                                   as name,
+       MAX(ut.location)                                                               as location,
+       min(ut.tweet_timestamp)                                                        as earliest_cdr_tweet,
+       max(ut.tweet_timestamp)                                                        as latest_cdr_tweet,
+       max(ut.tweet_timestamp) - min(ut.tweet_timestamp)                              as time_cdr_active,
+       min(ut.tweet_timestamp) - MAX(ut.created_at)                                   as time_to_first_cdr,
+       min(ut.tweet_timestamp) FILTER (WHERE ba.value_int > 1)                        as earliest_cdr_tweet_noccs,
+       max(ut.tweet_timestamp) FILTER (WHERE ba.value_int > 1)                        as latest_cdr_tweet_noccs,
+       MAX(ut.created_at)                                                             as created_at,
+       bool_or(ut.verified)                                                           as verified,
+       MAX(ut.description)                                                            as description
 FROM user_tweets ut
          LEFT JOIN bot_annotation ba on (ut.item_id = ba.item_id
     AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
     AND ba.key = 'tech')
-GROUP BY ut.name, ut.username, ut.location, ut.tweet_count, ut.listed_count, ut.followers_count, ut.following_count,
-         ut.created_at, ut.verified, ut.description, ut.twitter_author_id
+GROUP BY ut.twitter_author_id
 ORDER BY num_cdr_tweets DESC
 LIMIT 200;
 
@@ -326,45 +336,52 @@ WITH user_tweets as (SELECT ti.item_id,
                        AND ti.created_at >= '2010-01-01 00:00'::timestamp
                        AND ti.created_at <= '2022-12-31 23:59'::timestamp)
 SELECT ut.twitter_author_id,
-       ut.username,
+       MAX(ut.username)                                                               as username,
        -- Number of tweets matching any CDR query
-       count(DISTINCT ut.twitter_id)                                       as num_cdr_tweets,
+       count(DISTINCT ut.twitter_id)                                                  as num_cdr_tweets,
+       -- Number of tweets matching any CDR query (excluding Methane Removal (0) and CCS (1) )
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int > 1)                  as num_cdr_tweets_noccs,
+
        -- Tweets that are actually written and not just retweeted or quoted
-       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )           as num_orig_cdr_tweets,
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig )                      as num_orig_cdr_tweets,
+       -- Tweets that are actually written and not just retweeted or quoted (excluding Methane Removal (0) and CCS (1) )
+       count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig AND ba.value_int > 1 ) as num_orig_cdr_tweets_noccs,
        -- Total number of tweets by the user (as per Twitters profile information)
-       ut.tweet_count                                                      as num_tweets,
+       MAX(ut.tweet_count)                                                            as num_tweets,
        (count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig ))::float /
-       count(DISTINCT ut.twitter_id)::float * 100                          as perc_orig,
-       count(DISTINCT ut.twitter_id)::float / ut.tweet_count::float * 100  as perc_cdr,
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 2) as "Positive",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 1) as "Neutral",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 0) as "Negative",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)       as "Methane Removal",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)       as "CCS",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)       as "Ocean Fertilization",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)       as "Ocean Alkalinization",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)       as "Enhanced Weathering",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)       as "Biochar",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)       as "Afforestation/Reforestation",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)       as "Ecosystem Restoration",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)       as "Soil Carbon Sequestration",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)       as "BECCS",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)      as "Blue Carbon",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)      as "Direct Air Capture",
-       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)      as "GGR (general)",
-       ut.tweet_count,
-       ut.listed_count,
-       ut.followers_count,
-       ut.following_count,
-       ut.name,
-       ut.location,
-       min(ut.tweet_timestamp)                                             as earliest_cdr_tweet,
-       max(ut.tweet_timestamp)                                             as latest_cdr_tweet,
-       max(ut.tweet_timestamp) - min(ut.tweet_timestamp)                   as time_cdr_active,
-       min(ut.tweet_timestamp) - ut.created_at                             as time_to_first_cdr,
-       ut.created_at,
-       ut.verified,
-       ut.description
+       count(DISTINCT ut.twitter_id)::float * 100                                     as perc_orig,
+       count(DISTINCT ut.twitter_id)::float / MAX(ut.tweet_count)::float * 100        as perc_cdr,
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 2)            as "Positive",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 1)            as "Neutral",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 0)            as "Negative",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 0)                  as "Methane Removal",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 1)                  as "CCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 2)                  as "Ocean Fertilization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 3)                  as "Ocean Alkalinization",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 4)                  as "Enhanced Weathering",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 5)                  as "Biochar",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 6)                  as "Afforestation/Reforestation",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 7)                  as "Ecosystem Restoration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 8)                  as "Soil Carbon Sequestration",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 9)                  as "BECCS",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)                 as "Blue Carbon",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)                 as "Direct Air Capture",
+       count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)                 as "GGR (general)",
+       MAX(ut.tweet_count)                                                            as tweet_count,
+       MAX(ut.listed_count)                                                           as listed_count,
+       MAX(ut.followers_count)                                                        as followers_count,
+       MAX(ut.following_count)                                                        as following_count,
+       MAX(ut.name)                                                                   as name,
+       MAX(ut.location)                                                               as location,
+       min(ut.tweet_timestamp)                                                        as earliest_cdr_tweet,
+       max(ut.tweet_timestamp)                                                        as latest_cdr_tweet,
+       max(ut.tweet_timestamp) - min(ut.tweet_timestamp)                              as time_cdr_active,
+       min(ut.tweet_timestamp) - MAX(ut.created_at)                                   as time_to_first_cdr,
+       min(ut.tweet_timestamp) FILTER (WHERE ba.value_int > 1)                        as earliest_cdr_tweet_noccs,
+       max(ut.tweet_timestamp) FILTER (WHERE ba.value_int > 1)                        as latest_cdr_tweet_noccs,
+       MAX(ut.created_at)                                                             as created_at,
+       bool_or(ut.verified)                                                           as verified,
+       MAX(ut.description)                                                            as description
 FROM user_tweets ut
          LEFT JOIN bot_annotation ba_senti ON (
             ut.item_id = ba_senti.item_id
@@ -375,8 +392,7 @@ FROM user_tweets ut
             ut.item_id = ba.item_id
         AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
         AND ba.key = 'tech')
-GROUP BY ut.name, ut.username, ut.location, ut.tweet_count, ut.listed_count, ut.followers_count, ut.following_count,
-         ut.created_at, ut.verified, ut.description, ut.twitter_author_id
+GROUP BY ut.twitter_author_id
 ORDER BY num_cdr_tweets DESC
 LIMIT 50;
 
@@ -863,3 +879,30 @@ FROM grouped g
 group by g.bucket
 ORDER BY g.bucket
 LIMIT 10;
+
+
+SELECT MIN(created_at), MAX(created_at)
+FROM twitter_item
+WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3';
+
+SELECT count(distinct twitter_id)
+FROM twitter_item
+WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
+AND created_at < '2010-01-01 00:00:00';
+
+SELECT count(distinct twitter_id)
+FROM twitter_item
+WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3';
+
+SELECT count(distinct item_id), count(item_id)
+FRom bot_annotation
+where bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275' and parent is null;
+
+WITH a as (SELECT count(item_id) as c
+FRom bot_annotation
+where bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275' and parent is null
+group by item_id)
+SELECT c, count(1)
+FROM a
+group by c
+order by c;

@@ -1,0 +1,183 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{coral25514494}{RGB}{255,144,94}
+\definecolor{darkgray176}{RGB}{176,176,176}
+\definecolor{darkturquoise}{RGB}{0,206,209}
+\definecolor{indianred1918280}{RGB}{191,82,80}
+\definecolor{indianred2309996}{RGB}{230,99,96}
+\definecolor{lightgreen127235127}{RGB}{127,235,127}
+\definecolor{mediumseagreen106196106}{RGB}{106,196,106}
+\definecolor{mediumseagreen8515885}{RGB}{85,158,85}
+\definecolor{mediumturquoise}{RGB}{72,209,204}
+\definecolor{turquoise}{RGB}{64,224,208}
+
+\begin{groupplot}[group style={group size=2 by 1}]
+\nextgroupplot[
+height=6cm,
+tick align=outside,
+title={Sentiments},
+width=14cm,
+x grid style={darkgray176},
+xlabel={Share of tweets (\%)},
+xmin=-21.3224860467316, xmax=39.7697772653685,
+xtick pos=left,
+xtick style={color=black},
+y grid style={darkgray176},
+ymajorticks=false,
+ymin=-0.5, ymax=11.5,
+ytick style={color=black},
+ytick={0,1,2,3,4,5,6,7,8,9,10,11},
+yticklabels={
+  Ocean Fertilization,
+  Ocean Alkalinization,
+  Enhanced Weathering,
+  Biochar,
+  Afforestation/Reforestation,
+  Ecosystem Restoration,
+  Soil Carbon Sequestration,
+  BECCS,
+  Blue Carbon,
+  Direct Air Capture,
+  GGR (general),
+  Total
+}
+]
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,-0.25) rectangle (axis cs:2.25144262605241,0.25);
+\addlegendimage{ybar,ybar legend,draw=none,fill=mediumseagreen8515885}
+\addlegendentry{A}
+
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,0.75) rectangle (axis cs:9.14786967418546,1.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,1.75) rectangle (axis cs:7.77027027027027,2.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,2.75) rectangle (axis cs:16.3273727647868,3.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,3.75) rectangle (axis cs:11.3457765697439,4.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,4.75) rectangle (axis cs:10.8077632747899,5.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,5.75) rectangle (axis cs:11.7952486390841,6.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,6.75) rectangle (axis cs:9.97687911704402,7.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,7.75) rectangle (axis cs:15.832974601808,8.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,8.75) rectangle (axis cs:12.6747110700755,9.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,9.75) rectangle (axis cs:11.1725005917638,10.25);
+\draw[draw=none,fill=mediumseagreen8515885] (axis cs:0,10.75) rectangle (axis cs:14.4721182116092,11.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:2.25144262605241,-0.25) rectangle (axis cs:3.57582064137735,0.25);
+\addlegendimage{ybar,ybar legend,draw=none,fill=mediumseagreen106196106}
+\addlegendentry{B}
+
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:9.14786967418546,0.75) rectangle (axis cs:14.7869674185464,1.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:7.77027027027027,1.75) rectangle (axis cs:10.8378378378378,2.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:16.3273727647868,2.75) rectangle (axis cs:21.2700596056855,3.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:11.3457765697439,3.75) rectangle (axis cs:18.4281189377582,4.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:10.8077632747899,4.75) rectangle (axis cs:16.7224765939999,5.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:11.7952486390841,5.75) rectangle (axis cs:15.7953259913172,6.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:9.97687911704402,6.75) rectangle (axis cs:12.0708458753217,7.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:15.832974601808,7.75) rectangle (axis cs:21.0294569829654,8.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:12.6747110700755,8.75) rectangle (axis cs:16.781814129708,9.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:11.1725005917638,9.75) rectangle (axis cs:14.863374727933,10.25);
+\draw[draw=none,fill=mediumseagreen106196106] (axis cs:14.4721182116092,10.75) rectangle (axis cs:18.6806080137385,11.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:3.57582064137735,-0.25) rectangle (axis cs:7.43543657175291,0.25);
+\addlegendimage{ybar,ybar legend,draw=none,fill=lightgreen127235127}
+\addlegendentry{C}
+
+\draw[draw=none,fill=lightgreen127235127] (axis cs:14.7869674185464,0.75) rectangle (axis cs:21.9298245614035,1.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:10.8378378378378,1.75) rectangle (axis cs:17.3243243243243,2.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:21.2700596056855,2.75) rectangle (axis cs:30.1421366345713,3.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:18.4281189377582,3.75) rectangle (axis cs:36.8606218695543,4.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:16.7224765939999,4.75) rectangle (axis cs:29.5701496617235,5.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:15.7953259913172,5.75) rectangle (axis cs:21.7843226361641,6.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:12.0708458753217,6.75) rectangle (axis cs:16.2500545303843,7.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:21.0294569829654,7.75) rectangle (axis cs:29.9612569952647,8.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:16.781814129708,8.75) rectangle (axis cs:23.3913846349772,9.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:14.863374727933,9.75) rectangle (axis cs:22.1244609176092,10.25);
+\draw[draw=none,fill=lightgreen127235127] (axis cs:18.6806080137385,10.75) rectangle (axis cs:25.7289951397305,11.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-21.3224860467316,-0.25) rectangle (axis cs:-9.87607605713745,0.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-4.88721804511278,0.75) rectangle (axis cs:-3.50877192982456,1.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-5.13513513513514,1.75) rectangle (axis cs:-3.25675675675676,2.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-4.05318661164603,2.75) rectangle (axis cs:-2.92526364053187,3.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-11.9562477395031,3.75) rectangle (axis cs:-5.97209587794961,4.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-9.86468940066972,4.75) rectangle (axis cs:-6.06505842957698,5.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-9.78505748237819,5.75) rectangle (axis cs:-7.39584038366708,6.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-17.3406622169873,6.75) rectangle (axis cs:-13.0785673777429,7.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-5.36252383002275,7.75) rectangle (axis cs:-3.26917163766066,8.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-12.8370849119679,8.75) rectangle (axis cs:-9.55140246426183,9.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-13.45006956833,9.75) rectangle (axis cs:-8.8135280091911,10.25);
+\draw[draw=none,fill=coral25514494] (axis cs:-11.0807985841272,10.75) rectangle (axis cs:-8.17278864983053,11.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-9.87607605713745,-0.25) rectangle (axis cs:-4.7583010122032,0.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-3.50877192982456,0.75) rectangle (axis cs:-2.88220551378446,1.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-3.25675675675676,1.75) rectangle (axis cs:-2.31081081081081,2.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-2.92526364053187,2.75) rectangle (axis cs:-2.16414488766621,3.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-5.9720958779496,3.75) rectangle (axis cs:-3.61679508115869,4.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-6.06505842957698,4.75) rectangle (axis cs:-4.2404154992141,5.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-7.39584038366708,5.75) rectangle (axis cs:-5.80915270297709,6.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-13.0785673777429,6.75) rectangle (axis cs:-10.8231906818479,7.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-3.26917163766066,7.75) rectangle (axis cs:-2.26062357788574,8.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-9.55140246426183,8.75) rectangle (axis cs:-7.76210640262345,9.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-8.8135280091911,9.75) rectangle (axis cs:-6.56598022065573,10.25);
+\draw[draw=none,fill=indianred2309996] (axis cs:-8.17278864983053,10.75) rectangle (axis cs:-6.4862769393526,11.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-4.7583010122032,-0.25) rectangle (axis cs:-8.88178419700125e-16,0.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-2.88220551378446,0.75) rectangle (axis cs:0,1.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-2.31081081081081,1.75) rectangle (axis cs:0,2.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-2.16414488766621,2.75) rectangle (axis cs:0,3.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-3.61679508115869,3.75) rectangle (axis cs:1.33226762955019e-15,4.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-4.2404154992141,4.75) rectangle (axis cs:8.88178419700125e-16,5.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-5.80915270297709,5.75) rectangle (axis cs:0,6.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-10.8231906818479,6.75) rectangle (axis cs:0,7.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-2.26062357788574,7.75) rectangle (axis cs:-4.44089209850063e-16,8.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-7.76210640262345,8.75) rectangle (axis cs:1.77635683940025e-15,9.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-6.56598022065573,9.75) rectangle (axis cs:-8.88178419700125e-16,10.25);
+\draw[draw=none,fill=indianred1918280] (axis cs:-6.48627693935261,10.75) rectangle (axis cs:-8.88178419700125e-16,11.25);
+\path [draw=black]
+(axis cs:0,-1)
+--(axis cs:0,12);
+
+
+\nextgroupplot[
+height=6cm,
+tick align=outside,
+tick pos=left,
+title={Tweet count},
+width=14cm,
+x grid style={darkgray176},
+xlabel={Number of tweets/users},
+xmin=0, xmax=181871.55,
+xtick style={color=black},
+ymin=-0.5, ymax=11.5
+]
+\draw[draw=none,fill=darkturquoise] (axis cs:0,-0.25) rectangle (axis cs:2709,0.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,0.75) rectangle (axis cs:363,1.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,1.75) rectangle (axis cs:3799,2.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,2.75) rectangle (axis cs:11802,3.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,3.75) rectangle (axis cs:29575,4.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,4.75) rectangle (axis cs:9121,5.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,5.75) rectangle (axis cs:59644,6.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,6.75) rectangle (axis cs:13386,7.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,7.75) rectangle (axis cs:42419,8.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,8.75) rectangle (axis cs:16736,9.25);
+\draw[draw=none,fill=darkturquoise] (axis cs:0,9.75) rectangle (axis cs:92792,10.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:2709,-0.25) rectangle (axis cs:5157,0.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:363,0.75) rectangle (axis cs:524,1.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:3799,1.75) rectangle (axis cs:4952,2.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:11802,2.75) rectangle (axis cs:15389,3.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:29575,3.75) rectangle (axis cs:47598,4.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:9121,4.75) rectangle (axis cs:15733,5.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:59644,5.75) rectangle (axis cs:77319,6.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:13386,6.75) rectangle (axis cs:16837,7.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:42419,7.75) rectangle (axis cs:57022,8.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:16736,8.75) rectangle (axis cs:22091,9.25);
+\draw[draw=none,fill=mediumturquoise] (axis cs:92792,9.75) rectangle (axis cs:121002,10.25);
+\draw[draw=none,fill=turquoise] (axis cs:5157,-0.25) rectangle (axis cs:10571,0.25);
+\draw[draw=none,fill=turquoise] (axis cs:524,0.75) rectangle (axis cs:798,1.25);
+\draw[draw=none,fill=turquoise] (axis cs:4952,1.75) rectangle (axis cs:7400,2.25);
+\draw[draw=none,fill=turquoise] (axis cs:15389,2.75) rectangle (axis cs:21810,3.25);
+\draw[draw=none,fill=turquoise] (axis cs:47598,3.75) rectangle (axis cs:91241,4.25);
+\draw[draw=none,fill=turquoise] (axis cs:15733,4.75) rectangle (axis cs:29266,5.25);
+\draw[draw=none,fill=turquoise] (axis cs:77319,5.75) rectangle (axis cs:103423,6.25);
+\draw[draw=none,fill=turquoise] (axis cs:16837,6.75) rectangle (axis cs:22923,7.25);
+\draw[draw=none,fill=turquoise] (axis cs:57022,7.75) rectangle (axis cs:81305,8.25);
+\draw[draw=none,fill=turquoise] (axis cs:22091,8.75) rectangle (axis cs:31409,9.25);
+\draw[draw=none,fill=turquoise] (axis cs:121002,9.75) rectangle (axis cs:173211,10.25);
+\path [draw=black]
+(axis cs:0,-1)
+--(axis cs:0,12);
+
+\end{groupplot}
+
+\end{tikzpicture}

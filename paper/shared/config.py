@@ -10,6 +10,8 @@ class Config(BaseSettings):
     DATABASE: str = 'nacsos_core'  # name of the database
 
     PROJECT_ID: str
+    BA_TECH: str
+    BA_SENT: str
 
     class Config:
         case_sensitive = True

@@ -16,7 +16,7 @@ MIN_USER_CDR_TWEETS = 2
 
 print('Loading user data')
 with open('data/user_stats.pkl', 'rb') as f:
-    data: list[dict] = pickle.load(f)
+    data: list[dict] = [r.dict() for r in pickle.load(f)]
 
 print(f'Loaded stats for {len(data):,} users')
 
@@ -73,8 +73,7 @@ def make_figure(mask, fname):
                        count(DISTINCT ti.twitter_id) FILTER (WHERE ti.technology = 9)                  as "BECCS",
                        count(DISTINCT ti.twitter_id) FILTER (WHERE ti.technology = 10)                 as "Blue Carbon",
                        count(DISTINCT ti.twitter_id) FILTER (WHERE ti.technology = 11)                 as "Direct Air Capture",
-                       count(DISTINCT ti.twitter_id) FILTER (WHERE ti.technology = 12)                 as "GGR (general)"
-                                                                    
+                       count(DISTINCT ti.twitter_id) FILTER (WHERE ti.technology = 12)                 as "GGR (general)"                                             
                 FROM buckets b
                          LEFT OUTER JOIN tweets ti ON (
                             ti.created_at >= (b.bucket - :bucket_size ::interval)

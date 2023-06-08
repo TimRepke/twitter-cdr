@@ -34,10 +34,10 @@ def get_tech_data(technology: int | None = None):
         WITH tmp AS (SELECT ti.item_id,
                             twitter_id,
                             ti.twitter_author_id,
-                            (ti.'user' -> 'created_at')::text::timestamp                                        as created,
+                            (ti."user" -> 'created_at')::text::timestamp                                        as created,
                             extract('day' from date_trunc('day', :end_time ::timestamp -
-                                                                 (ti.'user' -> 'created_at')::text::timestamp)) as days,
-                            (ti.'user' -> 'tweet_count')::int                                                   as n_tweets
+                                                                 (ti."user" -> 'created_at')::text::timestamp)) as days,
+                            (ti."user" -> 'tweet_count')::int                                                   as n_tweets
                      FROM twitter_item ti
                               LEFT JOIN bot_annotation ba_tech ON (
                                  ti.item_id = ba_tech.item_id
@@ -48,19 +48,19 @@ def get_tech_data(technology: int | None = None):
                        AND ti.created_at <= :end_time ::timestamp
                        AND ba_tech.value_int {tech_filter}),
              users AS (SELECT twitter_author_id,
-                              days,
-                              n_tweets,
+                              MAX(days) as days,
+                              MAX(n_tweets) as n_tweets,
                               COUNT(DISTINCT twitter_id)                                           as n_cdr_tweets,
-                              count(DISTINCT tmp.twitter_id) FILTER (WHERE ba_senti.value_int = 2) as 'Positive',
-                              count(DISTINCT tmp.twitter_id) FILTER (WHERE ba_senti.value_int = 1) as 'Neutral',
-                              count(DISTINCT tmp.twitter_id) FILTER (WHERE ba_senti.value_int = 0) as 'Negative'
+                              count(DISTINCT tmp.twitter_id) FILTER (WHERE ba_senti.value_int = 2) as "Positive",
+                              count(DISTINCT tmp.twitter_id) FILTER (WHERE ba_senti.value_int = 1) as "Neutral",
+                              count(DISTINCT tmp.twitter_id) FILTER (WHERE ba_senti.value_int = 0) as "Negative"
                        FROM tmp
                                 LEFT JOIN bot_annotation ba_senti ON (
                                    tmp.item_id = ba_senti.item_id
                                AND ba_senti.bot_annotation_metadata_id = :ba_senti
                                AND ba_senti.key = 'senti'
                                AND ba_senti.repeat = 1)
-                       GROUP BY twitter_author_id, days, n_tweets),
+                       GROUP BY twitter_author_id),
              users_paneled AS (SELECT users.*,
                                       CASE
                                           WHEN n_tweets / days <= 100
@@ -74,7 +74,7 @@ def get_tech_data(technology: int | None = None):
                                           END as panel
                                FROM users)
         SELECT panel, count(distinct twitter_author_id) as n_users, 
-               SUM(n_cdr_tweets) as n_tweets, SUM('Positive') as pos, SUM('Neutral') as neu, SUM('Negative') as neg
+               SUM(n_cdr_tweets) as n_tweets, SUM("Positive") as pos, SUM("Neutral") as neu, SUM("Negative") as neg
         FROM users_paneled uf
         GROUP BY panel
         ORDER BY panel;''')

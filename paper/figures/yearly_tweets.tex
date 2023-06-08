@@ -1,0 +1,88 @@
+% This file was created with tikzplotlib v0.10.1.
+\begin{tikzpicture}
+
+\definecolor{darkgray176}{RGB}{176,176,176}
+\definecolor{darkorange25512714}{RGB}{255,127,14}
+\definecolor{navajowhite255201153}{RGB}{255,201,153}
+\definecolor{sandybrown255173102}{RGB}{255,173,102}
+
+\begin{axis}[
+height=6cm,
+legend pos=north west,
+scaled y ticks=false,
+tick align=outside,
+tick pos=left,
+width=14cm,
+x grid style={darkgray176},
+x tick label style={/pgf/number format/.cd,fixed,precision=0,set thousands separator={}},
+xmin=2004.925, xmax=2023.075,
+xmin=2009.5, xmax=2022.5,
+xtick style={color=black},
+y grid style={darkgray176},
+ymin=0, ymax=159147.45,
+ytick style={color=black},
+yticklabel style={ /pgf/number format/fixed, /pgf/number format/precision=5}
+]
+\draw[draw=none,fill=darkorange25512714] (axis cs:2005.75,0) rectangle (axis cs:2006.25,0);
+\addlegendimage{ybar,ybar legend,draw=none,fill=darkorange25512714}
+\addlegendentry{Analysed tweets}
+
+\draw[draw=none,fill=darkorange25512714] (axis cs:2006.75,0) rectangle (axis cs:2007.25,0);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2007.75,0) rectangle (axis cs:2008.25,4);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2008.75,0) rectangle (axis cs:2009.25,169);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2009.75,0) rectangle (axis cs:2010.25,4758);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2010.75,0) rectangle (axis cs:2011.25,8037);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2011.75,0) rectangle (axis cs:2012.25,11356);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2012.75,0) rectangle (axis cs:2013.25,17853);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2013.75,0) rectangle (axis cs:2014.25,13348);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2014.75,0) rectangle (axis cs:2015.25,15426);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2015.75,0) rectangle (axis cs:2016.25,17925);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2016.75,0) rectangle (axis cs:2017.25,19613);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2017.75,0) rectangle (axis cs:2018.25,17446);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2018.75,0) rectangle (axis cs:2019.25,20385);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2019.75,0) rectangle (axis cs:2020.25,33984);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2020.75,0) rectangle (axis cs:2021.25,31969);
+\draw[draw=none,fill=darkorange25512714] (axis cs:2021.75,0) rectangle (axis cs:2022.25,63954);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2005.75,0) rectangle (axis cs:2006.25,0);
+\addlegendimage{ybar,ybar legend,draw=none,fill=sandybrown255173102}
+\addlegendentry{Excluded tweets}
+
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2006.75,0) rectangle (axis cs:2007.25,0);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2007.75,4) rectangle (axis cs:2008.25,6);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2008.75,169) rectangle (axis cs:2009.25,305);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2009.75,4758) rectangle (axis cs:2010.25,8785);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2010.75,8037) rectangle (axis cs:2011.25,14629);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2011.75,11356) rectangle (axis cs:2012.25,20816);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2012.75,17853) rectangle (axis cs:2013.25,31432);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2013.75,13348) rectangle (axis cs:2014.25,23002);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2014.75,15426) rectangle (axis cs:2015.25,26773);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2015.75,17925) rectangle (axis cs:2016.25,30219);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2016.75,19613) rectangle (axis cs:2017.25,32360);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2017.75,17446) rectangle (axis cs:2018.25,27074);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2018.75,20385) rectangle (axis cs:2019.25,31173);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2019.75,33984) rectangle (axis cs:2020.25,47798);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2020.75,31969) rectangle (axis cs:2021.25,47756);
+\draw[draw=none,fill=sandybrown255173102] (axis cs:2021.75,63954) rectangle (axis cs:2022.25,98063);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2005.75,0) rectangle (axis cs:2006.25,0);
+\addlegendimage{ybar,ybar legend,draw=none,fill=navajowhite255201153}
+\addlegendentry{CCS tweets}
+
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2006.75,0) rectangle (axis cs:2007.25,0);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2007.75,6) rectangle (axis cs:2008.25,11);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2008.75,305) rectangle (axis cs:2009.25,238);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2009.75,8785) rectangle (axis cs:2010.25,6817);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2010.75,14629) rectangle (axis cs:2011.25,11783);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2011.75,20816) rectangle (axis cs:2012.25,17742);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2012.75,31432) rectangle (axis cs:2013.25,29972);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2013.75,23002) rectangle (axis cs:2014.25,23461);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2014.75,26773) rectangle (axis cs:2015.25,26821);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2015.75,30219) rectangle (axis cs:2016.25,36568);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2016.75,32360) rectangle (axis cs:2017.25,39338);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2017.75,27074) rectangle (axis cs:2018.25,40278);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2018.75,31173) rectangle (axis cs:2019.25,56408);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2019.75,47798) rectangle (axis cs:2020.25,86252);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2020.75,47756) rectangle (axis cs:2021.25,82573);
+\draw[draw=none,fill=navajowhite255201153] (axis cs:2021.75,98063) rectangle (axis cs:2022.25,151569);
+\end{axis}
+
+\end{tikzpicture}

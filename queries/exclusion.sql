@@ -30,7 +30,7 @@ WITH user_tweets as (SELECT ti.item_id,
                        AND ti.created_at >= '2010-01-01 00:00'::timestamp
                        AND ti.created_at <= '2022-12-31 23:59'::timestamp)
 SELECT ut.twitter_author_id,
-       ut.username,
+       MAX(ut.username)                                                               as username,
        -- Number of tweets matching any CDR query
        count(DISTINCT ut.twitter_id)                                                  as num_cdr_tweets,
        -- Number of tweets matching any CDR query (excluding Methane Removal (0) and CCS (1) )
@@ -41,10 +41,10 @@ SELECT ut.twitter_author_id,
        -- Tweets that are actually written and not just retweeted or quoted (excluding Methane Removal (0) and CCS (1) )
        count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig AND ba.value_int > 1 ) as num_orig_cdr_tweets_noccs,
        -- Total number of tweets by the user (as per Twitters profile information)
-       ut.tweet_count                                                                 as num_tweets,
+       MAX(ut.tweet_count)                                                            as num_tweets,
        (count(DISTINCT ut.twitter_id) FILTER ( WHERE ut.is_orig ))::float /
        count(DISTINCT ut.twitter_id)::float * 100                                     as perc_orig,
-       count(DISTINCT ut.twitter_id)::float / ut.tweet_count::float * 100             as perc_cdr,
+       count(DISTINCT ut.twitter_id)::float / MAX(ut.tweet_count)::float * 100        as perc_cdr,
        count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 2)            as "Positive",
        count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 1)            as "Neutral",
        count(DISTINCT ut.twitter_id) FILTER (WHERE ba_senti.value_int = 0)            as "Negative",
@@ -61,19 +61,21 @@ SELECT ut.twitter_author_id,
        count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 10)                 as "Blue Carbon",
        count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 11)                 as "Direct Air Capture",
        count(DISTINCT ut.twitter_id) FILTER (WHERE ba.value_int = 12)                 as "GGR (general)",
-       ut.tweet_count,
-       ut.listed_count,
-       ut.followers_count,
-       ut.following_count,
-       ut.name,
-       ut.location,
+       MAX(ut.tweet_count) as tweet_count,
+       MAX(ut.listed_count) as listed_count,
+       MAX(ut.followers_count) as followers_count,
+       MAX(ut.following_count) as following_count,
+       MAX(ut.name) as name,
+       MAX(ut.location) as location,
        min(ut.tweet_timestamp)                                                        as earliest_cdr_tweet,
        max(ut.tweet_timestamp)                                                        as latest_cdr_tweet,
        max(ut.tweet_timestamp) - min(ut.tweet_timestamp)                              as time_cdr_active,
-       min(ut.tweet_timestamp) - ut.created_at                                        as time_to_first_cdr,
-       ut.created_at,
-       ut.verified,
-       ut.description
+       min(ut.tweet_timestamp) - MAX(ut.created_at)                                   as time_to_first_cdr,
+       min(ut.tweet_timestamp) FILTER (WHERE ba.value_int >1)                         as earliest_cdr_tweet_noccs,
+       max(ut.tweet_timestamp) FILTER (WHERE ba.value_int >1)                         as latest_cdr_tweet_noccs,
+       MAX(ut.created_at) as created_at,
+       MAX(ut.verified) as verified,
+       MAX(ut.description) as description
 FROM user_tweets ut
          LEFT JOIN bot_annotation ba_senti ON (
             ut.item_id = ba_senti.item_id
@@ -85,9 +87,7 @@ FROM user_tweets ut
         AND ba.bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
         AND ba.key = 'tech'
     )
-GROUP BY ut.name, ut.username, ut.location, ut.tweet_count, ut.listed_count, ut.followers_count,
-         ut.following_count,
-         ut.created_at, ut.verified, ut.description, ut.twitter_author_id;
+GROUP BY ut.twitter_author_id;
 
 
 WITH buckets as (SELECT generate_series('2006-01-01 00:00'::timestamp,
