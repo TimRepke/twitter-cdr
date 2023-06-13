@@ -888,7 +888,7 @@ WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3';
 SELECT count(distinct twitter_id)
 FROM twitter_item
 WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3'
-AND created_at < '2010-01-01 00:00:00';
+  AND created_at < '2010-01-01 00:00:00';
 
 SELECT count(distinct twitter_id)
 FROM twitter_item
@@ -896,13 +896,20 @@ WHERE twitter_item.project_id = 'c5d36b2e-cbb4-47a8-8370-e5f52bb78bf3';
 
 SELECT count(distinct item_id), count(item_id)
 FRom bot_annotation
-where bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275' and parent is null;
+where bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+  and parent is null;
 
 WITH a as (SELECT count(item_id) as c
-FRom bot_annotation
-where bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275' and parent is null
-group by item_id)
+           FRom bot_annotation
+           where bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
+             and parent is null
+           group by item_id)
 SELECT c, count(1)
 FROM a
 group by c
 order by c;
+
+SELECT bucket, bucket + '1 year'::interval
+FROM (SELECT generate_series('2006-01-01 00:00'::timestamp,
+                             '2022-12-31 23:59'::timestamp,
+                             '1 year') as bucket) a;

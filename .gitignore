@@ -16,6 +16,7 @@ data/
 *.jsonl
 *.html
 *.png
+*.pdf
 *.npy
 *.csv
 *.yaml
