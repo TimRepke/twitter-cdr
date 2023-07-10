@@ -18,16 +18,16 @@ END = '2022-12-31 23:59'
 TECHS = {
     # 0: 'Methane Removal',
     # 1: 'CCS',
-    2: 'Ocean\nFertilization',
-    3: 'Ocean\nAlkalinization',
-    4: 'Enhanced\nWeathering',
+    2: 'Ocean Fertilization',
+    3: 'Ocean Alkalinization',
+    4: 'Enhanced Weathering',
     5: 'Biochar',
-    6: 'Afforestation/\nReforestation',
-    7: 'Ecosystem\nRestoration',
-    8: 'Soil Carbon\n Sequestration',
+    6: 'Afforestation - Reforestation',
+    7: 'Ecosystem Restoration',
+    8: 'Soil Carbon Sequestration',
     9: 'BECCS',
     10: 'Blue Carbon',
-    11: 'Direct Air\n Capture',
+    11: 'Direct Air Capture',
     12: 'GGR (general)',
     100: 'Total',
     # 200: 'Total (incl. CCS\&MR)'
@@ -45,8 +45,8 @@ def get_data(cache: Path | None = None):
     else:
         stmt = text(f'''
            WITH buckets as (SELECT generate_series('2010-01-01 00:00'::timestamp,
-                                                    '2022-12-31 00:00'::timestamp,
-                                                    '3 months') as bucket),
+                                                   '2022-12-31 00:00'::timestamp,
+                                                   '3 months') as bucket),
                  technologies as (SELECT DISTINCT value_int as technology
                                   FROM bot_annotation
                                   WHERE bot_annotation_metadata_id = 'fc73da56-9f51-4d2b-ad35-2a01dbe9b275'
@@ -191,176 +191,66 @@ tab = full_tab \
 tab = tab.reset_index()
 tab.set_index('Technology', inplace=True)
 
-print(tab)
+pd.options.display.max_columns = None
+pd.options.display.max_rows = None
+pd.options.display.expand_frame_repr = False
 
-techs = list(tab.index)
-stack_n_pos = tab[['A+', 'B+', 'C+', 'All+']]
-stack_n_neu = tab[['A0', 'B0', 'C0', 'All0']]
-stack_n_neg = tab[['A-', 'B-', 'C-', 'All-']]
-stack_n_tot = tab[['A', 'B', 'C', 'All']]
+acc_med = []
+acc_avg = []
+acc_std = []
 
-GREENS = ['#559E55', '#6AC46A', '#7FEB7F']
-REDS = ['#BF5250', '#E66360', '#FF905E']
-# BLUES = [ '#00CED1','#48D1CC', '#40E0D0']
-BLUES = ['#4F77AA', '#78AED3', '#AAC9DD']
-GREY = '#E4E8EE'  # '#C9EBEF'
+latex = []
 
-TARGET = 'figures/sentiments'
-SHOW_NUMS = True
+with pd.ExcelWriter('figures/sentiments/stats.xlsx') as writer:
+    for tech in list(tab.index):
+        timeline = full_tab[full_tab['Technology'] == tech]
+        timeline = timeline.set_index('bucket_dt')
+        timeline['yr'] = [r['bucket'].year for _, r in timeline.iterrows()]
+        ttab = timeline.reset_index()[['yr',
+                                       'A+', 'A0', 'A-', 'A',
+                                       'B+', 'B0', 'B-', 'B',
+                                       'C+', 'C0', 'C-', 'C',
+                                       'All+', 'All0', 'All-', 'All']].groupby('yr').sum()
+        ttab.to_excel(writer, sheet_name=tech)
 
-stack_n_pos_rel = pd.DataFrame(stack_n_pos.to_numpy() / stack_n_tot['All'].to_numpy().reshape((-1, 1)),
-                               index=stack_n_pos.index, columns=stack_n_pos.columns)
-stack_n_neu_rel = pd.DataFrame(stack_n_neu.to_numpy() / stack_n_tot['All'].to_numpy().reshape((-1, 1)),
-                               index=stack_n_neu.index, columns=stack_n_neu.columns)
-stack_n_neg_rel = pd.DataFrame(stack_n_neg.to_numpy() / stack_n_tot['All'].to_numpy().reshape((-1, 1)),
-                               index=stack_n_neg.index, columns=stack_n_neg.columns)
-stack_n_pos_rel.fillna(0, inplace=True)
-stack_n_neu_rel.fillna(0, inplace=True)
-stack_n_neg_rel.fillna(0, inplace=True)
-stack_n_pos_rel_self = pd.DataFrame(stack_n_pos.to_numpy() / stack_n_tot.to_numpy(),
-                                    index=stack_n_pos.index, columns=stack_n_pos.columns)
-stack_n_neu_rel_self = pd.DataFrame(stack_n_neu.to_numpy() / stack_n_tot.to_numpy(),
-                                    index=stack_n_neu.index, columns=stack_n_neu.columns)
-stack_n_neg_rel_self = pd.DataFrame(stack_n_neg.to_numpy() / stack_n_tot.to_numpy(),
-                                    index=stack_n_neg.index, columns=stack_n_neg.columns)
-stack_n_pos_rel_self.fillna(0, inplace=True)
-stack_n_neu_rel_self.fillna(0, inplace=True)
-stack_n_neg_rel_self.fillna(0, inplace=True)
+        tmp = ttab[1:].values / ttab[:-1].values
+        tmp[np.isinf(tmp)] = np.nan
+        tmp = pd.DataFrame(tmp, index=ttab.index[1:], columns=ttab.columns).reset_index()
 
-plt.rcParams.update({
-    'hatch.color': '#FFFFFF',
-    'hatch.linewidth': 0.5,
-    'text.usetex': True,
-    'font.family': 'sans-serif',
-    'font.sans-serif': 'Helvetica',
-    'font.size': 20.0  # default: 10
-})
+        med = ['med'] + tmp.median(axis=0).to_list()[1:]
+        avg = ['avg'] + tmp.mean(axis=0).to_list()[1:]
+        std = ['std'] + tmp.std(axis=0).to_list()[1:]
 
-print('Normalise to all tweets')
-fig: plt.Figure
-fig = plt.figure(figsize=(15, 10), dpi=150, layout='constrained')  # width/height
-fig.subplots_adjust(hspace=0, wspace=0)
-outer_grid = fig.add_gridspec(nrows=1, ncols=3, wspace=0, hspace=0, width_ratios=[0.2, 0.4, 0.4])
+        latex.append((tech, tmp['All'], med[-1], avg[-1], std[-1]))
 
-BAR_WIDTH = 0.2
-ax = fig.add_subplot(outer_grid[0, 1])
-for off, col, name, colour in [(-BAR_WIDTH - 0.05, 'A+', 'A', GREENS[0]),
-                               (0, 'B+', 'B', GREENS[1]),
-                               (BAR_WIDTH + 0.05, 'C+', 'C', GREENS[2])]:
-    values = stack_n_pos_rel_self[col].to_numpy() * 100
-    b = ax.barh(np.arange(len(techs)) + off, values, BAR_WIDTH, color=GREY, label=name)
-    if SHOW_NUMS:
-        for ri, rect in enumerate(b.patches):
-            ax.text(values[ri],
-                    rect.get_y() + BAR_WIDTH,
-                    f'{values[ri]:.1f}\%',
-                    fontsize=12)
+        tmp.loc[12] = med
+        tmp.loc[13] = avg
+        tmp.loc[14] = std
+        tmp = tmp.set_index('yr')
+        tmp.to_excel(writer, sheet_name=tech, startrow=16, float_format="%.2f")
+        acc_med.append(tmp.loc['med'])
+        acc_avg.append(tmp.loc['avg'])
+        acc_std.append(tmp.loc['std'])
 
-    values = stack_n_pos_rel[col].to_numpy() * 100
-    b = ax.barh(np.arange(len(techs)) + off, values, BAR_WIDTH, color=colour, label=name)
-    if SHOW_NUMS:
-        for ri, rect in enumerate(b.patches):
-            ax.text(values[ri],
-                    rect.get_y() + BAR_WIDTH,
-                    f'{values[ri]:.1f}\%',
-                    fontsize=12)
+    tab_med = pd.DataFrame(acc_med, index=tab.index, columns=tmp.columns)
+    tab_avg = pd.DataFrame(acc_avg, index=tab.index, columns=tmp.columns)
+    tab_std = pd.DataFrame(acc_std, index=tab.index, columns=tmp.columns)
+    tab_med.to_excel(writer, sheet_name='Averages', float_format="%.2f")
+    tab_avg.to_excel(writer, sheet_name='Averages', startrow=16, float_format="%.2f")
+    tab_std.to_excel(writer, sheet_name='Averages', startrow=32, float_format="%.2f")
 
-for off, col, name, colour in [(-BAR_WIDTH - 0.05, 'A-', 'A', REDS[0]),
-                               (0, 'B-', 'B', REDS[1]),
-                               (BAR_WIDTH + 0.05, 'C-', 'C', REDS[2])]:
-    values = stack_n_neg_rel_self[col].to_numpy() * -100
-    b = ax.barh(np.arange(len(techs)) + off, values, BAR_WIDTH, color=GREY, label=name)
-    if SHOW_NUMS:
-        for ri, rect in enumerate(b.patches):
-            ax.text(values[ri],
-                    rect.get_y() + BAR_WIDTH,
-                    f'{(-1) * values[ri]:.1f}\%',
-                    horizontalalignment='right',
-                    fontsize=12)
-    values = stack_n_neg_rel[col].to_numpy() * -100
-    b = ax.barh(np.arange(len(techs)) + off, -values, BAR_WIDTH, left=values, color=colour,
-                label=name)
-    if SHOW_NUMS:
-        for ri, rect in enumerate(b.patches):
-            ax.text(values[ri],
-                    rect.get_y() + BAR_WIDTH,
-                    f'{(-1) * values[ri]:.1f}\%',
-                    horizontalalignment='right',
-                    fontsize=12)
+print('\\toprule')
+print('Method & ', end='')
+for yr in range(2010, 2022, 1):
+    print(f'{yr}--{yr + 1} & ', end='')
+print('median (std)\\\\\\midrule')
+for tech, nums, med, avg, std in latex:
+    print(tech, end=' & ')
+    for num in nums:
+        print(f'{num:.2f}', end=' & ')
+    print(f'{med:.2f} ({std:.2f}) \\\\')
+print('\\bottomrule')
 
-ax.vlines(0, -0.5, len(techs) - 0.5, color='black', lw=1)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.spines['bottom'].set_visible(True)
-ax.spines['left'].set_visible(False)
-ax.tick_params(axis='y', left=False)
-ax.set_yticks([])
-ax.set_ylim(-0.5, len(techs) - 0.5)
-# if xlim is not None:
-#     ax.set_xlim(*xlim)
-# ax.set_title('Sentiments')
-ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f'{abs(int(x))}\%'))
-ax.set_xlabel('Share of tweets')
-ax.invert_yaxis()
 
-timelines_grid = outer_grid[0, 2].subgridspec(nrows=len(TECHS), ncols=1, wspace=0, hspace=0)
 
-for ti, tech in enumerate(list(tab.index)):
-    timeline = full_tab[full_tab['Technology'] == tech]
-    timeline = timeline.set_index('bucket_dt')
-    xs = timeline.index
-    ax = fig.add_subplot(timelines_grid[ti, 0])
-    subax = ax.twinx()
-    ax.spines.top.set_visible(False)
-    ax.spines.right.set_visible(False)
-    ax.spines.bottom.set_visible(False)
-    ax.spines.left.set_visible(False)
 
-    bpos = (-1) * (timeline['All+'] / timeline['All'])
-    bpos.fillna(0, inplace=True)
-    bneg = timeline['All-'] / timeline['All']
-    bneg.fillna(0, inplace=True)
-    ax.bar(xs, bpos, width=72, bottom=1, color=GREENS[0])
-    ax.bar(xs, bneg, width=72, color=REDS[0])
-    ax.set_ylim(0, 1)
-    subax.plot(xs, timeline['All'])
-    subax.set_ylim(0, timeline[['All']].to_numpy().max())
-
-    # ax.set_xlim(xs[0], xs[-1])
-    ax.set_xlim(datetime.date(2009, 11, 1), datetime.date(2023, 1, 15))
-    if tech == 'Total':
-        ax.set_yticks([])
-        subax.set_yticks([])
-        ax.xaxis.set_major_locator(mdates.YearLocator(base=2))
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y', usetex=False))
-        ax.xaxis.set_tick_params(rotation=45)
-    else:
-        subax.set(xticks=[], yticks=[])
-        ax.set(xticks=[], yticks=[])
-
-print(stack_n_tot)
-ax = fig.add_subplot(outer_grid[0, 0])
-for off, col, colour in [(-BAR_WIDTH - 0.05, 'A', BLUES[0]),
-                         (0, 'B', BLUES[1]),
-                         (BAR_WIDTH + 0.05, 'C', BLUES[2])]:
-    values = stack_n_tot[col].to_numpy()
-    values[-1] = 0
-    ax.barh(np.arange(len(techs)) + off,
-            values,
-            BAR_WIDTH,
-            color=colour,
-            label=name)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.spines['bottom'].set_visible(True)
-ax.spines.left.set_visible(True)
-ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f'{int(x):,}'))
-ax.tick_params(axis='y', left=False)
-ax.set_yticks(np.arange(len(techs)), techs)  # , fontsize=36)
-# ax.xaxis.set_fontsize(36)
-ax.set_ylim(-0.5, len(techs) - 0.5)
-ax.set_xlabel('Number of tweets')
-ax.invert_yaxis()
-
-plt.savefig(f'{TARGET}/sentiments_timeline_shares.pdf')
-fig.show()

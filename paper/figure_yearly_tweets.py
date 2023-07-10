@@ -55,8 +55,8 @@ def get_data(mask):
                                                                         AND ti.technology > 1)               as num_tweets_filtered_noccs
                     FROM buckets b
                              LEFT OUTER JOIN tweets ti ON (
-                                ti.created_at >= (b.bucket - :bucket_size ::interval)
-                            AND ti.created_at < b.bucket)
+                                 ti.created_at >= b.bucket 
+                            AND ti.created_at < (b.bucket + :bucket_size ::interval))
                              LEFT OUTER JOIN users u ON ti.twitter_author_id = u.author_id
                     GROUP BY b.bucket;
                     ''')

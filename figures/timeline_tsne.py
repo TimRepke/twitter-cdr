@@ -16,6 +16,7 @@ from common.vector_index import VectorIndex
 from common.config import settings
 from common.db_cache import QueryCache
 
+
 class LogLevel(str, Enum):
     DEBUG = 'DEBUG'
     WARN = 'WARN'
