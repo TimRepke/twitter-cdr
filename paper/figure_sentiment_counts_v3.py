@@ -8,7 +8,7 @@ import matplotlib.dates as mdates
 from sqlalchemy import text, bindparam, ARRAY, String
 import numpy as np
 from matplotlib import pyplot as plt
-import tikzplotlib
+# import tikzplotlib
 from pathlib import Path
 from shared.db import run_query
 
@@ -34,7 +34,7 @@ TECHS = {
 }
 
 # ORDER = [12, 11, 4, 3, 2, 10, 8, 7, 6, 5, 9, 100, 1, 0, 200]
-ORDER = [12, 11, 4, 3, 2, 10, 8, 7, 6, 5, 9, 100]
+ORDER = [12, 11, 4, 3, 2, 5, 9, 10, 8, 7, 6, 100]
 
 
 def get_data(cache: Path | None = None):

@@ -43,6 +43,5 @@ interactive/projection/falcon/yarn.lock
 interactive/projection/falcon/
 **/.ipynb_checkpoints/
 paper/data/
-paper/figures
 paper/tmp.ipynb
 lexis*

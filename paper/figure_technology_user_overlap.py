@@ -237,12 +237,26 @@ TECHS = {
 ORDER = [12, 11, 4, 3, 2, 10, 8, 7, 6, 5, 9]
 LABELS = [TECHS[o] for o in ORDER]
 
+print('Fetching tweet counts counts A')
+tweet_tech_counts_a_dat = data(stmt_tech_counts_tweets, Path('data/tweet_tech_count_panel_a.pkl'), 0, 3)
+tweet_tech_counts_a = np.zeros((len(LABELS),))
+for row in tweet_tech_counts_a_dat:
+    tweet_tech_counts_a[ORDER.index(row['technology'])] = row['cnt']
+print(tweet_tech_counts_a)
+
 print('Fetching tweet counts counts B')
 tweet_tech_counts_b_dat = data(stmt_tech_counts_tweets, Path('data/tweet_tech_count_panel_b.pkl'), 2, 50)
 tweet_tech_counts_b = np.zeros((len(LABELS),))
 for row in tweet_tech_counts_b_dat:
     tweet_tech_counts_b[ORDER.index(row['technology'])] = row['cnt']
 print(tweet_tech_counts_b)
+
+print('Fetching counts A')
+tech_counts_a_dat = data(stmt_tech_counts, Path('data/tech_count_panel_a.pkl'), 0, 3)
+tech_counts_a = np.zeros((len(LABELS),))
+for row in tech_counts_a_dat:
+    tech_counts_a[ORDER.index(row['technology'])] = row['cnt']
+print(tech_counts_a)
 
 print('Fetching counts B')
 tech_counts_b_dat = data(stmt_tech_counts, Path('data/tech_count_panel_b.pkl'), 2, 50)
@@ -268,6 +282,14 @@ tweet_tech_counts_c = np.zeros((len(LABELS),))
 for row in tweet_tech_counts_c_dat:
     tweet_tech_counts_c[ORDER.index(row['technology'])] = row['cnt']
 print(tweet_tech_counts_c)
+
+print('Fetching double coding A')
+doubled_a_dat = data(stmt_double_coded, Path('data/tech_double_coding_a.pkl'), 0, 2)
+doubled_a = np.zeros((len(LABELS), len(LABELS)))
+for row in doubled_a_dat:
+    doubled_a[ORDER.index(row['te1']), ORDER.index(row['te2'])] = row['cnt']
+np.fill_diagonal(doubled_a, 0)  # reset diagonal to 0
+doubled_a = doubled_a + doubled_a.T  # make matrix symmetric
 
 print('Fetching double coding B')
 doubled_b_dat = data(stmt_double_coded, Path('data/tech_double_coding_b.pkl'), 2, 50)
@@ -340,105 +362,179 @@ def draw(values, tit, tr, perc, inte):
     plt.tight_layout()
 
 
-# print('Drawing B')
-# draw(overlaps_b_dat, overlaps_b_rel, '3-50 tweets', tr=False, perc=True)
-# plt.savefig(f'figures/technology_user_overlap_b.pdf')
-# plt.show()
-#
-# print('Drawing C')
-# draw(overlaps_c_dat, overlaps_c_rel, '>50 tweets', tr=True, perc=True)
-# plt.savefig(f'figures/technology_user_overlap_c.pdf')
-# plt.show()
+def plot(overlap, expected, ticks_right=False):
+    plt.rcParams.update({
+        'hatch.color': '#FFFFFF',
+        'hatch.linewidth': 0.5,
+        # 'text.usetex': True,
+        # 'font.family': 'sans-serif',
+        # 'font.sans-serif': 'Helvetica',
+        'font.size': 20.0  # default: 10
+    })
+    fig, ax = plt.subplots(figsize=(12, 12), dpi=150)
+
+    exp_norm = np.log10(overlap / expected)
+
+    overlap_m = np.ma.masked_array(overlap, np.tril(overlap, k=-1) > 0)
+    expected_m = np.ma.masked_array(expected, np.triu(expected, k=1) > 0)
+    expected_n_m = np.ma.masked_array(exp_norm, np.triu(exp_norm, k=1) > 0)
+
+    pe = ax.imshow(expected_n_m, cmap='RdYlGn', vmin=-1, vmax=1)
+    po = ax.imshow(overlap_m, cmap='YlGn')
+
+    for i in range(len(LABELS)):
+        for j in range(len(LABELS)):
+            if i == j:
+                continue
+            if i > j:
+                ax.text(i, j, f'{overlap[i, j].astype(int):,}', ha='center', va='center', fontsize=16)
+            else:
+                ax.text(i, j, f'{exp_norm[i, j]:.2f}', ha='center', va='center', fontsize=16)
+
+    ax.invert_yaxis()
+    ax.set_yticks(np.arange(len(LABELS)), LABELS)
+    if ticks_right:
+        ax.yaxis.tick_right()
+        ax.set_xticks(np.arange(len(LABELS)), LABELS, rotation=-40, ha='left')
+    else:
+        ax.set_xticks(np.arange(len(LABELS)), LABELS, rotation=40, ha='right')
+
+    plt.tight_layout()
+
+
+def plot_int(mat, ticks_right=False):
+    plt.rcParams.update({
+        'hatch.color': '#FFFFFF',
+        'hatch.linewidth': 0.5,
+        # 'text.usetex': True,
+        # 'font.family': 'sans-serif',
+        # 'font.sans-serif': 'Helvetica',
+        'font.size': 20.0  # default: 10
+    })
+    fig, ax = plt.subplots(figsize=(12, 12), dpi=150)
+
+    ax.imshow(mat, cmap='YlGn')
+
+    for i in range(len(LABELS)):
+        for j in range(len(LABELS)):
+            if i == j:
+                continue
+            ax.text(i, j, f'{mat[i, j].astype(int):,}', ha='center', va='center', fontsize=16)
+
+    ax.invert_yaxis()
+    ax.set_yticks(np.arange(len(LABELS)), LABELS)
+    if ticks_right:
+        ax.yaxis.tick_right()
+        ax.set_xticks(np.arange(len(LABELS)), LABELS, rotation=-40, ha='left')
+    else:
+        ax.set_xticks(np.arange(len(LABELS)), LABELS, rotation=40, ha='right')
+
+    plt.tight_layout()
+
+def plot_perc(mat, ticks_right=False):
+    plt.rcParams.update({
+        'hatch.color': '#FFFFFF',
+        'hatch.linewidth': 0.5,
+        # 'text.usetex': True,
+        # 'font.family': 'sans-serif',
+        # 'font.sans-serif': 'Helvetica',
+        'font.size': 20.0  # default: 10
+    })
+    fig, ax = plt.subplots(figsize=(12, 12), dpi=150)
+
+    ax.imshow(mat, cmap='YlGn')
+
+    for i in range(len(LABELS)):
+        for j in range(len(LABELS)):
+            if i == j:
+                continue
+            ax.text(i, j, f'{mat[j, i]:.0%}', ha='center', va='center', fontsize=16)
+
+    ax.invert_yaxis()
+    ax.set_yticks(np.arange(len(LABELS)), LABELS)
+    if ticks_right:
+        ax.yaxis.tick_right()
+        ax.set_xticks(np.arange(len(LABELS)), LABELS, rotation=-40, ha='left')
+    else:
+        ax.set_xticks(np.arange(len(LABELS)), LABELS, rotation=40, ha='right')
+
+    plt.tight_layout()
+
 print(doubled_b)
 print('db mean', doubled_b.mean())
 print('db med', np.median(doubled_b))
 print('Drawing normed B')
-expected = np.zeros((11, 11))
 # tpu = tweet_tech_counts_b / tech_counts_b
 EPS = 1e-10
-for i in range(11):
-    for j in range(11):
-        TOTAL = 39847
-        proba_i = tech_counts_b[i] / TOTAL
-        proba_j = tech_counts_b[j] / TOTAL
 
-        tpu_i = tweet_tech_counts_b[i] / (tech_counts_b[i] + 1)
-        tpu_j = tweet_tech_counts_b[j] / (tech_counts_b[j] + 1)
-        # prop_multi = tweet_tech_counts_b[i] / (doubled_b[i, j]+1)
-        # overlap_adjust = prop_multi/tpu
 
-        # # expected[i, j] = proba_i * proba_j * TOTAL * overlap_adjust
-        # overlap_adjust = doubled_b[i, j] / (tweet_tech_counts_b[i]+1)
-        # # overlap_adjust = doubled_b[i, j] / (doubled_b.sum() / 2)
-        # # overlap_adjust *= tweet_tech_counts_b[i]
-        # overlap_adjust /= (tpu_i+tpu_j)
-        # # overlap_adjust = 0
-        #
-        # expected[i, j] = (proba_i * proba_j) * TOTAL + overlap_adjust*TOTAL
+def expectation(tc, ttc, doub, tot):
+    ret = np.zeros((11, 11))
+    for i in range(11):
+        for j in range(11):
+            proba_i = tc[i] / tot
+            proba_j = tc[j] / tot
 
-        overlap_adjust = doubled_b[i, j] / (doubled_b.sum() / 2)
-        overlap_adjust /= tpu_i
-        overlap_adjust /= tpu_j
-        # expected[i, j] = ((proba_i * proba_j) + overlap_adjust) * (TOTAL - doubled_b.sum() / 2)
-        # expected[i, j] = ((proba_i * proba_j) + overlap_adjust) * TOTAL
-        expected[i, j] = proba_i * proba_j * TOTAL + overlap_adjust * TOTAL
-        print(i, j, overlap_adjust)
+            tpu_i = ttc[i] / tc[i]
+            tpu_j = ttc[j] / tc[j]
 
-        # expected[i, j] = (tweet_tech_counts_b[i] / 39847) * (tweet_tech_counts_b[j] / 39847) * 39847
-        # expected[i, j] = (tech_counts_b[i] / 39847) * (tech_counts_b[j] / 39847) * 39847 * (doubled_b.max() / doubled_b[i, j])
-        # expected[i, j] = (((tech_counts_b[i] / 39847) * (tech_counts_b[j] / 39847)) + (
-        #             doubled_b[i, j] / (doubled_b.sum() / 2))) * 39847
-        # expected[i, j] = (tech_counts_b[i] / 39847) * (tech_counts_b[j] / 39847) * 39847 * (tpu.max()/tpu[i]) * (tpu.max()/tpu[j])
-        # expected[i, j] = (tweet_tech_counts_b[i] / tweet_tech_counts_b.sum()) * (tweet_tech_counts_b[j] / tweet_tech_counts_b.sum()) * tweet_tech_counts_b.sum()
-# mat = tech_counts_b.repeat(len(TECHS)).reshape((len(TECHS),-1)).T
-# dst = (tech_counts_b.T / 39847).T
-# m1 = dst.repeat(len(TECHS)).reshape((len(TECHS), -1)).T
-# m2 = (m1.T / dst).T
-# print(m2)
-# expected = (m1*m1.T).T * 39847
-# # expected = m2 * 39847
-# print(overlaps_b.astype(int))
-print(expected.astype(int))
+            overlap_adjust = doub[i, j] / ((tpu_i + tpu_j) / 2)
 
-print('ob sum', overlaps_b.sum())
-print('e sum', expected.sum())
-print('lol', (expected * (overlaps_b.sum() / expected.sum())).sum())
+            ret[i, j] = proba_i * proba_j * tot + overlap_adjust + tpu_i + tpu_j
+    return ret
 
-# draw(((overlaps_b - expected) / expected), '>50 tweets', tr=False, perc=False,inte=False)
+
+expected_b = expectation(tech_counts_b, tweet_tech_counts_b, doubled_b, 39847)
+expected_c = expectation(tech_counts_c, tweet_tech_counts_c, doubled_c, 1308)
+
+print(expected_b.sum(), overlaps_b.sum())
+print(expected_c.sum(), overlaps_c.sum())
+
+expected_b = expected_b * (overlaps_b.sum() / expected_b.sum())
+expected_c = expected_c * (overlaps_c.sum() / expected_c.sum())
+
+print(expected_b.sum(), overlaps_b.sum())
+print(expected_c.sum(), overlaps_c.sum())
+
+# draw(np.log10(overlaps_b / expected_b), 'log(overlap/expected) B', tr=False, perc=False, inte=False)
 # plt.show()
-# draw(np.log(overlaps_b  / expected), '>50 tweets', tr=False, perc=False,inte=False)
-# draw(overlaps_b  / expected, '>50 tweets', tr=False, perc=False,inte=False)
-draw((overlaps_b / expected) - 1, 'overlap/expected', tr=False, perc=False, inte=False)
-# draw((overlaps_b / (expected*(overlaps_b.sum()/expected.sum())))-1, '>50 tweets', tr=False, perc=False, inte=False)
-# # plt.savefig(f'figures/technology_user_overlap_c.pdf')
+# draw(np.log10(overlaps_c / expected_c), 'log(overlap/expected) C', tr=False, perc=False, inte=False)
+# plt.show()
+
+# draw(expected_b, 'expected B', tr=False, perc=False, inte=True)
+# plt.show()
+# draw(expected_c, 'expected C', tr=False, perc=False, inte=True)
+# plt.show()
+# draw(overlaps_b, 'overlaps B', tr=False, perc=False, inte=True)
+# plt.show()
+# draw(overlaps_c, 'overlaps C', tr=False, perc=False, inte=True)
+# plt.show()
+
+
+doubled = doubled_c + doubled_b + doubled_a
+tech_counts = tech_counts_a + tech_counts_b + tech_counts_c
+tweet_tech_counts = tweet_tech_counts_a + tweet_tech_counts_b + tweet_tech_counts_c
+plot_int(doubled, ticks_right=False)
+plt.savefig(f'figures/multilabels.pdf')
+plt.show()
+# plot_perc((doubled.T / tech_counts).T, ticks_right=True)
+# plt.savefig(f'figures/multilabels_rel.pdf')
+# plt.show()
+plot_perc((doubled.T / tweet_tech_counts).T, ticks_right=True)
+plt.savefig(f'figures/multilabels_rel.pdf')
 plt.show()
 
-draw(overlaps_b-expected, '>50 tweets', tr=False, perc=False, inte=True)
-# draw((overlaps_b / (expected*(overlaps_b.sum()/expected.sum())))-1, '>50 tweets', tr=False, perc=False, inte=False)
-# # plt.savefig(f'figures/technology_user_overlap_c.pdf')
+# draw(doubled_a, 'A', tr=False, perc=False, inte=True)
+# plt.show()
+# draw(doubled_b, 'B', tr=False, perc=False, inte=True)
+# plt.show()
+# draw(doubled_c, 'C', tr=False, perc=False, inte=True)
+# plt.show()
+plot(overlaps_b, expected_b, ticks_right=False)
+plt.savefig(f'figures/user_tech_overlaps_b.pdf')
+plt.show()
+plot(overlaps_c, expected_c, ticks_right=True)
+plt.savefig(f'figures/user_tech_overlaps_c.pdf')
 plt.show()
 
-draw(expected, '>50 tweets', tr=False, perc=False, inte=True)
-plt.show()
-draw(overlaps_b, '>50 tweets', tr=False, perc=False, inte=True)
-plt.show()
 
-# draw(doubled_c, '>50 tweets', tr=False, perc=False, inte=True)
-# plt.show()
-# draw(doubled_b, '>50 tweets', tr=False, perc=False, inte=True)
-# plt.show()
-
-# print('Drawing C-B')
-# draw(overlaps_c_dat, overlaps_c_rel-overlaps_b_rel, 'diff', tr=False, perc=True)
-# plt.savefig(f'figures/technology_user_overlap_diff.pdf')
-# plt.show()
-
-# print('Drawing B')
-# draw(overlaps_b_dat, overlaps_b_rel * tech_adjustment_b, '3-50 tweets', tr=False, perc=False)
-# plt.savefig(f'figures/technology_user_overlap_b_adjusted.pdf')
-# plt.show()
-
-# print('Drawing C')
-# draw(overlaps_c_dat, overlaps_c_rel * tech_adjustment_c, '>50 tweets', tr=True, perc=False)
-# plt.savefig(f'figures/technology_user_overlap_c_adjusted.pdf')
-# plt.show()

@@ -46,12 +46,12 @@ def get_data(cache: Path | None = None):
                  users AS (SELECT users_pre.*,
                                   CASE
                                       WHEN n_tweets / days <= 100
-                                          AND n_cdr_tweets <= 2 THEN 'A'
+                                          AND n_cdr_tweets_noccs <= 2 THEN 'A'
                                       WHEN n_tweets / days <= 100
-                                          AND n_cdr_tweets > 2
-                                          AND n_cdr_tweets <= 50 THEN 'B'
+                                          AND n_cdr_tweets_noccs > 2
+                                          AND n_cdr_tweets_noccs <= 50 THEN 'B'
                                       WHEN n_tweets / days <= 100
-                                          AND n_cdr_tweets > 50 THEN 'C'
+                                          AND n_cdr_tweets_noccs > 50 THEN 'C'
                                       ELSE 'EX'
                                       END as panel
                            FROM users_pre)
@@ -142,27 +142,64 @@ TECHS = {
 ORDER = [12, 11, 4, 3, 2, 10, 8, 7, 6, 5, 9, 100, 1, 0, 200]
 
 
-def print_table(tab, incl_perc=True, precision=0):
-    print('\\begin{tabular}{lrrrrr}\n'
-          '\\toprule\n'
-          'Technology & A & B & C & EX & All \\\\\n'
-          '\\midrule')
+def print_table_diff(tab, baseline, pp=True, print_ex: bool = True):
+    print('\\begin{tabular}{lrrrrr}')
+    print('\\toprule')
+    if print_ex:
+        print('Technology & A & B & C & EX & All \\\\')
+    else:
+        print('Technology & A & B & C & All \\\\')
+    print('\\midrule')
+    for ri, row in tab.iterrows():
+        if pp:
+            rel = row / row['All']
+            rdiff = rel - baseline
+        else:
+            expected = row['All'] * baseline
+            rdiff = (row - expected)/row['All']
+
+        ex = f'& {row["EX"]:,} ' if print_ex else ''
+        txt = (f'{ri} '
+               f'& {row["A"]:,} {{\\footnotesize({rdiff["A"]:.0%})}} '
+               f'& {row["B"]:,} {{\\footnotesize({rdiff["B"]:.0%})}} '
+               f'& {row["C"]:,} {{\\footnotesize({rdiff["C"]:.0%})}} '
+               f'{ex}'
+               f'& {row["All"]:,} \\\\')
+        print(txt.replace('%', '\%'))
+
+        if ri in {'Total', 'Methane Removal', 'BECCS'}:
+            print('\\midrule')
+
+    print('\\bottomrule\n'
+          '\\end{tabular}')
+
+
+def print_table(tab, incl_perc=True, precision=0, print_ex: bool = True):
+    print('\\begin{tabular}{lrrrrr}')
+    print('\\toprule')
+    if print_ex:
+        print('Technology & A & B & C & EX & All \\\\')
+    else:
+        print('Technology & A & B & C & All \\\\')
+    print('\\midrule')
     for ri, row in tab.iterrows():
         if incl_perc:
             rel = row / row['All']
+            ex = f'& {row["EX"]:,} ' if print_ex else ''
             txt = (f'{ri} '
                    f'& {row["A"]:,} {{\\footnotesize({rel["A"]:.0%})}} '
                    f'& {row["B"]:,} {{\\footnotesize({rel["B"]:.0%})}} '
                    f'& {row["C"]:,} {{\\footnotesize({rel["C"]:.0%})}} '
-                   f'& {row["EX"]:,} '
+                   f'{ex}'
                    f'& {row["All"]:,} \\\\')
             print(txt.replace('%', '\%'))
         else:
+            ex = f'& {row["EX"]:.{precision}f} ' if print_ex else ''
             print(f'{ri} '
                   f'& {row["A"]:.{precision}f} '
                   f'& {row["B"]:.{precision}f} '
                   f'& {row["C"]:.{precision}f} '
-                  f'& {row["EX"]:.{precision}f} '
+                  f'{ex}'
                   f'& {row["All"]:.{precision}f} \\\\')
 
         if ri in {'Total', 'Methane Removal', 'BECCS'}:
@@ -172,7 +209,7 @@ def print_table(tab, incl_perc=True, precision=0):
           '\\end{tabular}')
 
 
-def tech_count_table(prefix):
+def tech_count_table(prefix, print_ex: bool = True):
     data = {
         int(d['technology']): {
             'Technology': TECHS[int(d['technology'])],
@@ -187,7 +224,7 @@ def tech_count_table(prefix):
 
     tab = pd.DataFrame([data[di] for di in ORDER])
     tab.set_index('Technology', inplace=True)
-    print_table(tab)
+    print_table(tab, print_ex=print_ex)
     # print(tab.style
     #       .format(subset="A", precision=1, thousands=",")
     #       .format(subset="B", precision=1, thousands=",")
@@ -199,6 +236,13 @@ def tech_count_table(prefix):
 
 
 t1 = tech_count_table('tweets')
+print()
 t2 = tech_count_table('users')
-
+print()
 print_table(t1 / t2, incl_perc=False, precision=2)
+print()
+print_table_diff(t1, baseline=t1.loc['Total'] / t1.loc['Total']['All'], print_ex=True, pp=False)
+print()
+print_table_diff(t1, baseline=t1.loc['Total'] / t1.loc['Total']['All'], print_ex=False, pp=True)
+print()
+t3 = tech_count_table('tweets', print_ex=False)

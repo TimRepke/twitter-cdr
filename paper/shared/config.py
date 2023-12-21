@@ -1,5 +1,7 @@
 import os
-from pydantic import BaseSettings
+
+from pydantic import ConfigDict
+from pydantic_settings import BaseSettings
 
 
 class Config(BaseSettings):
@@ -16,6 +18,7 @@ class Config(BaseSettings):
     class Config:
         case_sensitive = True
         env_prefix = 'TGEO_'
+        extra = 'allow'
 
 
 conf_file = os.environ.get('TGEO_PAPER_CONFIG', 'conf.env')
